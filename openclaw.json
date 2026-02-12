@@ -1,0 +1,94 @@
+{
+  "name": "ca-agent-skills",
+  "version": "1.0.0",
+  "description": "AI Agent toolkit for Portkey Wallet on aelf blockchain",
+  "tools": [
+    {
+      "name": "portkey-query-check-account",
+      "description": "Check if an email is registered in Portkey",
+      "command": "bun run portkey_query_skill.ts check-account",
+      "args": ["--email"],
+      "options": ["--network"]
+    },
+    {
+      "name": "portkey-query-guardian-list",
+      "description": "Get guardian list for an account",
+      "command": "bun run portkey_query_skill.ts guardian-list",
+      "args": ["--identifier"],
+      "options": ["--chain-id", "--network"]
+    },
+    {
+      "name": "portkey-query-chain-info",
+      "description": "Get chain configuration info",
+      "command": "bun run portkey_query_skill.ts chain-info",
+      "options": ["--network"]
+    },
+    {
+      "name": "portkey-query-balance",
+      "description": "Get token balance",
+      "command": "bun run portkey_query_skill.ts balance",
+      "args": ["--ca-address", "--chain-id", "--symbol"],
+      "options": ["--network"]
+    },
+    {
+      "name": "portkey-query-token-price",
+      "description": "Get token prices in USD",
+      "command": "bun run portkey_query_skill.ts token-price",
+      "args": ["--symbols"],
+      "options": ["--network"]
+    },
+    {
+      "name": "portkey-auth-get-verifier",
+      "description": "Get an assigned verifier server",
+      "command": "bun run portkey_auth_skill.ts get-verifier",
+      "options": ["--chain-id", "--network"]
+    },
+    {
+      "name": "portkey-auth-send-code",
+      "description": "Send verification code to email",
+      "command": "bun run portkey_auth_skill.ts send-code",
+      "args": ["--email", "--verifier-id"],
+      "options": ["--chain-id", "--operation", "--network"]
+    },
+    {
+      "name": "portkey-auth-verify-code",
+      "description": "Verify a 6-digit code",
+      "command": "bun run portkey_auth_skill.ts verify-code",
+      "args": ["--email", "--code", "--verifier-id", "--session-id"],
+      "options": ["--chain-id", "--operation", "--network"]
+    },
+    {
+      "name": "portkey-auth-create-wallet",
+      "description": "Create a new manager wallet",
+      "command": "bun run portkey_auth_skill.ts create-wallet"
+    },
+    {
+      "name": "portkey-auth-register",
+      "description": "Register a new Portkey CA wallet",
+      "command": "bun run portkey_auth_skill.ts register",
+      "args": ["--email", "--manager", "--verifier-id", "--verification-doc", "--signature"],
+      "options": ["--chain-id", "--network"]
+    },
+    {
+      "name": "portkey-auth-check-status",
+      "description": "Check registration/recovery status",
+      "command": "bun run portkey_auth_skill.ts check-status",
+      "args": ["--session-id", "--type"],
+      "options": ["--network"]
+    },
+    {
+      "name": "portkey-tx-transfer",
+      "description": "Transfer tokens on the same chain",
+      "command": "bun run portkey_tx_skill.ts transfer",
+      "args": ["--ca-hash", "--token-contract", "--symbol", "--to", "--amount", "--chain-id"],
+      "options": ["--memo", "--network"]
+    },
+    {
+      "name": "portkey-tx-forward-call",
+      "description": "Generic ManagerForwardCall to any contract",
+      "command": "bun run portkey_tx_skill.ts forward-call",
+      "args": ["--ca-hash", "--contract-address", "--method-name", "--args", "--chain-id"],
+      "options": ["--network"]
+    }
+  ]
+}

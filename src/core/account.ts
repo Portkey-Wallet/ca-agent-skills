@@ -1,0 +1,205 @@
+import type {
+  PortkeyConfig,
+  ChainId,
+  ChainInfo,
+  GuardianItem,
+  VerifierItem,
+  HolderInfo,
+} from '../../lib/types.js';
+import { createHttpClient } from '../../lib/http.js';
+import { callViewMethod } from '../../lib/aelf-client.js';
+
+// ============================================================================
+// checkAccount
+// ============================================================================
+
+export interface CheckAccountParams {
+  /** Email address to check */
+  email: string;
+}
+
+export interface CheckAccountResult {
+  /** Whether the account is already registered */
+  isRegistered: boolean;
+  /** Origin chain ID where the account was first created */
+  originChainId: ChainId | null;
+}
+
+/**
+ * Check if an email account is already registered in Portkey.
+ * Returns the originChainId if registered.
+ *
+ * API: GET /api/app/wallet/getRegisterInfo
+ */
+export async function checkAccount(
+  config: PortkeyConfig,
+  params: CheckAccountParams,
+): Promise<CheckAccountResult> {
+  if (!params.email) throw new Error('email is required');
+
+  const http = createHttpClient(config);
+
+  try {
+    const result = await http.get<{ originChainId: ChainId }>('/api/app/account/registerInfo', {
+      params: { loginGuardianIdentifier: params.email },
+    });
+    return {
+      isRegistered: true,
+      originChainId: result.originChainId,
+    };
+  } catch (err: unknown) {
+    // If the account doesn't exist, the API returns an error
+    if (err instanceof Error && (err.message.includes('3002') || err.message.includes('not exist'))) {
+      return { isRegistered: false, originChainId: null };
+    }
+    throw err;
+  }
+}
+
+// ============================================================================
+// getGuardianList
+// ============================================================================
+
+export interface GetGuardianListParams {
+  /** Guardian identifier (email, phone, or social ID) */
+  identifier: string;
+  /** Chain ID to query guardians from */
+  chainId?: ChainId;
+}
+
+export interface GuardianListItem {
+  guardianIdentifier: string;
+  identifierHash: string;
+  isLoginGuardian: boolean;
+  salt: string;
+  /** Guardian type as string label (e.g. "Email", "Phone", "Google") */
+  type: string;
+  verifierId: string;
+  /** Optional fields returned by API */
+  thirdPartyEmail?: string | null;
+  isPrivate?: boolean | null;
+  firstName?: string | null;
+  lastName?: string | null;
+}
+
+export interface GetGuardianListResult {
+  guardians: GuardianListItem[];
+  /** CA hash (returned when account is found) */
+  caHash?: string;
+  /** CA address (returned when account is found) */
+  caAddress?: string;
+  /** Chain where the CA was created */
+  createChainId?: ChainId;
+}
+
+/**
+ * Get all guardians associated with an account.
+ *
+ * API: GET /api/app/account/guardianIdentifiers
+ */
+export async function getGuardianList(
+  config: PortkeyConfig,
+  params: GetGuardianListParams,
+): Promise<GetGuardianListResult> {
+  if (!params.identifier) throw new Error('identifier is required');
+
+  const http = createHttpClient(config);
+
+  const result = await http.get<{
+    guardianList?: { guardians: GuardianListItem[] };
+    guardianAccounts?: GuardianListItem[];
+    caHash?: string;
+    caAddress?: string;
+    createChainId?: ChainId;
+  }>('/api/app/account/guardianIdentifiers', {
+    params: {
+      guardianIdentifier: params.identifier,
+      chainId: params.chainId || 'AELF',
+    },
+  });
+
+  // Normalize response - API may return in different formats
+  const guardians =
+    result.guardianList?.guardians || result.guardianAccounts || [];
+
+  return {
+    guardians,
+    caHash: result.caHash,
+    caAddress: result.caAddress,
+    createChainId: result.createChainId,
+  };
+}
+
+// ============================================================================
+// getHolderInfo
+// ============================================================================
+
+export interface GetHolderInfoParams {
+  /** CA hash */
+  caHash: string;
+  /** Chain ID */
+  chainId: ChainId;
+}
+
+/**
+ * Get CA holder info directly from the blockchain (on-chain view call).
+ * Returns guardian list, manager list, CA address, etc.
+ *
+ * Contract: GetHolderInfo (view method on CA contract)
+ */
+export async function getHolderInfo(
+  config: PortkeyConfig,
+  params: GetHolderInfoParams,
+): Promise<HolderInfo> {
+  if (!params.caHash) throw new Error('caHash is required');
+  if (!params.chainId) throw new Error('chainId is required');
+
+  // First get chain info to find the CA contract address and RPC endpoint
+  const chainInfo = await getChainInfoByChainId(config, params.chainId);
+
+  const result = await callViewMethod<HolderInfo>(
+    chainInfo.endPoint,
+    chainInfo.caContractAddress,
+    'GetHolderInfo',
+    { caHash: params.caHash },
+  );
+
+  if (!result || !result.caHash) {
+    throw new Error(`Holder not found for caHash: ${params.caHash}`);
+  }
+
+  return result;
+}
+
+// ============================================================================
+// getChainInfo
+// ============================================================================
+
+/**
+ * Get chain info for all available chains (RPC endpoints, contract addresses).
+ *
+ * API: GET /api/app/search/chainsinfoindex
+ */
+export async function getChainInfo(
+  config: PortkeyConfig,
+): Promise<ChainInfo[]> {
+  const http = createHttpClient(config);
+
+  const result = await http.get<{ items: ChainInfo[] }>('/api/app/search/chainsinfoindex');
+  return result.items || [];
+}
+
+/**
+ * Get chain info for a specific chain ID.
+ */
+export async function getChainInfoByChainId(
+  config: PortkeyConfig,
+  chainId: ChainId,
+): Promise<ChainInfo> {
+  const chains = await getChainInfo(config);
+  const chain = chains.find((c) => c.chainId === chainId);
+  if (!chain) {
+    throw new Error(`Chain "${chainId}" not found. Available: ${chains.map((c) => c.chainId).join(', ')}`);
+  }
+  return chain;
+}
