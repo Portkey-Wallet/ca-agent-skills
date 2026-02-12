@@ -1,10 +1,12 @@
 #!/usr/bin/env bun
 import { Command } from 'commander';
 import * as fs from 'fs';
+import * as path from 'path';
 import { setupClaude } from './platforms/claude.js';
 import { setupCursor } from './platforms/cursor.js';
 import { setupOpenClaw } from './platforms/openclaw.js';
 import {
+  getPackageRoot,
   getPlatformPaths,
   readJsonFile,
   writeJsonFile,
@@ -79,15 +81,16 @@ program
   .action(() => {
     const paths = getPlatformPaths();
 
-    console.log('Portkey Agent Skills — Configuration Status\n');
+    console.log('Portkey CA Agent Skills — Configuration Status\n');
 
-    const checks = [
+    // MCP platforms
+    const mcpChecks = [
       { name: 'Claude Desktop', path: paths.claude },
       { name: 'Cursor (global)', path: paths.cursorGlobal },
       { name: 'Cursor (project)', path: paths.cursorProject },
     ];
 
-    for (const { name, path: configPath } of checks) {
+    for (const { name, path: configPath } of mcpChecks) {
       const exists = fs.existsSync(configPath);
       if (!exists) {
         console.log(`  ${name}: [NOT FOUND] ${configPath}`);
@@ -100,6 +103,18 @@ program
         `  ${name}: ${hasPortkey ? '[CONFIGURED]' : '[EXISTS, NOT CONFIGURED]'} ${configPath}`,
       );
     }
+
+    // OpenClaw
+    const resolvedOpenclawPath = path.join(getPackageRoot(), 'openclaw.json');
+    const openclawExists = fs.existsSync(resolvedOpenclawPath);
+    if (openclawExists) {
+      const oc = readJsonFile(resolvedOpenclawPath);
+      const toolCount = Array.isArray(oc.tools) ? oc.tools.length : 0;
+      console.log(`  OpenClaw: [AVAILABLE] ${toolCount} tools defined — ${resolvedOpenclawPath}`);
+    } else {
+      console.log(`  OpenClaw: [NOT FOUND] ${resolvedOpenclawPath}`);
+    }
+
     console.log('');
   });
 
@@ -108,12 +123,41 @@ program
 // ---------------------------------------------------------------------------
 program
   .command('uninstall <platform>')
-  .description('Remove Portkey config from a platform (claude, cursor)')
+  .description('Remove Portkey config from a platform (claude, cursor, openclaw)')
   .option('--global', 'Target global Cursor config')
   .option('--config-path <path>', 'Custom config file path')
   .action((platform, opts) => {
     const paths = getPlatformPaths();
 
+    // --- OpenClaw: remove tools by name prefix from a config file ---
+    if (platform === 'openclaw') {
+      if (!opts.configPath) {
+        console.error('[ERROR] OpenClaw uninstall requires --config-path <path>');
+        process.exit(1);
+      }
+      if (!fs.existsSync(opts.configPath)) {
+        console.log(`[SKIP] Config not found: ${opts.configPath}`);
+        return;
+      }
+      const config = readJsonFile(opts.configPath);
+      const tools = config.tools as { name?: string }[] | undefined;
+      if (!Array.isArray(tools) || tools.length === 0) {
+        console.log(`[SKIP] No tools found in ${opts.configPath}`);
+        return;
+      }
+      const before = tools.length;
+      config.tools = tools.filter((t) => !t.name?.startsWith('portkey-'));
+      const removed = before - (config.tools as unknown[]).length;
+      if (removed === 0) {
+        console.log(`[SKIP] No Portkey tools found in ${opts.configPath}`);
+        return;
+      }
+      writeJsonFile(opts.configPath, config);
+      console.log(`[REMOVED] ${removed} Portkey tools from ${opts.configPath}`);
+      return;
+    }
+
+    // --- MCP platforms: claude, cursor ---
     let configPath: string;
     if (opts.configPath) {
       configPath = opts.configPath;
@@ -122,7 +166,7 @@ program
     } else if (platform === 'cursor') {
       configPath = opts.global ? paths.cursorGlobal : paths.cursorProject;
     } else {
-      console.error(`[ERROR] Unknown platform: ${platform}. Use "claude" or "cursor".`);
+      console.error(`[ERROR] Unknown platform: ${platform}. Use "claude", "cursor", or "openclaw".`);
       process.exit(1);
     }
 

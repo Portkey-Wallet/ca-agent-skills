@@ -100,11 +100,19 @@ bun run bin/setup.ts cursor
 # Cursor (global)
 bun run bin/setup.ts cursor --global
 
-# Check status
+# OpenClaw — output config to stdout
+bun run bin/setup.ts openclaw
+
+# OpenClaw — merge into existing config
+bun run bin/setup.ts openclaw --config-path ./my-openclaw.json
+
+# Check status (Claude, Cursor, OpenClaw)
 bun run bin/setup.ts list
 
 # Remove
 bun run bin/setup.ts uninstall claude
+bun run bin/setup.ts uninstall cursor
+bun run bin/setup.ts uninstall openclaw --config-path ./my-openclaw.json
 ```
 
 ## Usage
@@ -127,6 +135,10 @@ Add to your MCP config (`mcp-config.example.json`):
   }
 }
 ```
+
+### OpenClaw
+
+The `openclaw.json` in the project root defines 13 CLI-based tools for OpenClaw. Use `bun run bin/setup.ts openclaw` to generate or merge the config.
 
 ### CLI
 

@@ -72,10 +72,19 @@ cp .env.example .env
 # 编辑 .env，添加 PORTKEY_PRIVATE_KEY（仅写操作需要）
 
 # 一键配置到 AI 平台
-bun run bin/setup.ts claude         # Claude Desktop
-bun run bin/setup.ts cursor         # Cursor（项目级）
+bun run bin/setup.ts claude          # Claude Desktop
+bun run bin/setup.ts cursor          # Cursor（项目级）
 bun run bin/setup.ts cursor --global # Cursor（全局）
-bun run bin/setup.ts list           # 查看配置状态
+bun run bin/setup.ts openclaw        # OpenClaw — 输出配置到 stdout
+bun run bin/setup.ts openclaw --config-path ./my-openclaw.json  # 合并到已有配置
+
+# 查看配置状态（Claude / Cursor / OpenClaw）
+bun run bin/setup.ts list
+
+# 卸载
+bun run bin/setup.ts uninstall claude
+bun run bin/setup.ts uninstall cursor
+bun run bin/setup.ts uninstall openclaw --config-path ./my-openclaw.json
 ```
 
 ## SDK 使用示例
