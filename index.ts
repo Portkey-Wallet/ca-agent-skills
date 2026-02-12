@@ -1,5 +1,5 @@
 // ============================================================================
-// @portkey-wallet/ca-agent-skills — SDK Entry
+// @portkey/ca-agent-skills — SDK Entry
 //
 // Pure re-exports. Zero logic.
 // ============================================================================

@@ -1,5 +1,5 @@
 {
-  "name": "@portkey-wallet/ca-agent-skills",
+  "name": "@portkey/ca-agent-skills",
   "version": "1.0.0",
   "description": "AI Agent toolkit for Portkey Wallet on the aelf blockchain — Email registration, login, transfers, guardian management, and more.",
   "type": "module",

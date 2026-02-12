@@ -65,7 +65,7 @@ ca-agent-skills/
 
 ```bash
 # 安装
-bun add @portkey-wallet/ca-agent-skills
+bun add @portkey/ca-agent-skills
 
 # 配置
 cp .env.example .env
@@ -90,7 +90,7 @@ bun run bin/setup.ts uninstall openclaw --config-path ./my-openclaw.json
 ## SDK 使用示例
 
 ```typescript
-import { getConfig, checkAccount, createWallet, getTokenBalance } from '@portkey-wallet/ca-agent-skills';
+import { getConfig, checkAccount, createWallet, getTokenBalance } from '@portkey/ca-agent-skills';
 
 const config = getConfig({ network: 'mainnet' });
 
@@ -117,7 +117,7 @@ import {
   getConfig, createWallet, getVerifierServer,
   sendVerificationCode, verifyCode, registerWallet,
   checkRegisterOrRecoveryStatus, OperationType,
-} from '@portkey-wallet/ca-agent-skills';
+} from '@portkey/ca-agent-skills';
 
 const config = getConfig({ network: 'mainnet' });
 

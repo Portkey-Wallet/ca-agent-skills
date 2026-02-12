@@ -73,7 +73,7 @@ ca-agent-skills/
 ### 1. Install
 
 ```bash
-bun add @portkey-wallet/ca-agent-skills
+bun add @portkey/ca-agent-skills
 
 # Or clone locally
 git clone https://github.com/AwakenFinance/ca-agent-skills.git
@@ -159,7 +159,7 @@ bun run portkey_tx_skill.ts transfer --ca-hash xxx --token-contract xxx --symbol
 ### SDK
 
 ```typescript
-import { getConfig, checkAccount, createWallet, getTokenBalance } from '@portkey-wallet/ca-agent-skills';
+import { getConfig, checkAccount, createWallet, getTokenBalance } from '@portkey/ca-agent-skills';
 
 const config = getConfig({ network: 'mainnet' });
 
