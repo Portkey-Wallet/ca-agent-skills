@@ -1,3 +1,4 @@
+import AElf from 'aelf-sdk';
 import type {
   PortkeyConfig,
   TransferParams,
@@ -151,14 +152,15 @@ export async function getTransactionResult(
 // ============================================================================
 
 /**
- * Convert chain ID string to its numeric representation.
+ * Convert chain ID string to its numeric representation via base58 decode.
+ *
  * 'AELF' → 9992731, 'tDVV' → 1866392, 'tDVW' → 1931928
- * Uses base-58-like encoding that aelf uses internally.
+ *
+ * Uses aelf-sdk's official `chainIdConvertor.base58ToChainId` which:
+ *   1. Base58 decodes the string to 3 bytes
+ *   2. Pads to 4 bytes
+ *   3. Reads as little-endian int32
  */
 function chainIdToNum(chainId: string): number {
-  let result = 0;
-  for (let i = 0; i < chainId.length; i++) {
-    result += chainId.charCodeAt(i) << (8 * i);
-  }
-  return result;
+  return AElf.utils.chainIdConvertor.base58ToChainId(chainId);
 }

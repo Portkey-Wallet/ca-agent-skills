@@ -4,6 +4,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { getConfig } from '../../lib/config.js';
 import { createWallet, getWalletByPrivateKey } from '../../lib/aelf-client.js';
+import { validateRpcUrl } from '../../lib/http.js';
 import { LoginType, OperationType } from '../../lib/types.js';
 
 // Core functions
@@ -38,6 +39,53 @@ function fail(err: unknown) {
   const message = err instanceof Error ? err.message : String(err);
   return { content: [{ type: 'text' as const, text: `[ERROR] ${message}` }], isError: true as const };
 }
+
+/** Parse a JSON string and validate against a zod schema. */
+function parseJson<T>(raw: string, schema: z.ZodType<T>, label: string): T {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`Invalid JSON for ${label}: ${raw.slice(0, 200)}`);
+  }
+  return schema.parse(parsed);
+}
+
+// ---------------------------------------------------------------------------
+// Shared zod schemas for JSON string inputs
+// ---------------------------------------------------------------------------
+
+const CaAddressInfoSchema = z.array(z.object({
+  chainId: z.string(),
+  caAddress: z.string(),
+}));
+
+const GuardianApprovedSchema = z.array(z.object({
+  identifier: z.string().optional(),
+  identifierHash: z.string().optional(),
+  type: z.union([z.string(), z.number()]).optional(),
+  verifierId: z.string(),
+  verificationDoc: z.string(),
+  signature: z.string(),
+}));
+
+const GuardianToAddSchema = z.object({
+  identifierHash: z.string(),
+  type: z.number(),
+  verificationInfo: z.object({
+    id: z.string(),
+    signature: z.string(),
+    verificationDoc: z.string(),
+  }),
+});
+
+const GuardianToRemoveSchema = z.object({
+  identifierHash: z.string(),
+  type: z.number(),
+  verificationInfo: z.object({
+    id: z.string(),
+  }),
+});
 
 // ---------------------------------------------------------------------------
 // 1. portkey_check_account
@@ -240,7 +288,7 @@ server.registerTool(
   },
   async ({ email, manager, guardiansApproved, chainId, network }) => {
     try {
-      const parsed = JSON.parse(guardiansApproved);
+      const parsed = parseJson(guardiansApproved, GuardianApprovedSchema, 'guardiansApproved');
       return ok(await recoverWallet(getConfig({ network }), {
         email, manager, guardiansApproved: parsed, chainId,
       }));
@@ -303,7 +351,7 @@ server.registerTool(
   },
   async ({ caAddressInfos, network }) => {
     try {
-      const parsed = JSON.parse(caAddressInfos);
+      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos');
       return ok(await getTokenList(getConfig({ network }), { caAddressInfos: parsed }));
     } catch (err) { return fail(err); }
   },
@@ -323,7 +371,7 @@ server.registerTool(
   },
   async ({ caAddressInfos, network }) => {
     try {
-      const parsed = JSON.parse(caAddressInfos);
+      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos');
       return ok(await getNftCollections(getConfig({ network }), { caAddressInfos: parsed }));
     } catch (err) { return fail(err); }
   },
@@ -344,7 +392,7 @@ server.registerTool(
   },
   async ({ caAddressInfos, symbol, network }) => {
     try {
-      const parsed = JSON.parse(caAddressInfos);
+      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos');
       return ok(await getNftItems(getConfig({ network }), { caAddressInfos: parsed, symbol }));
     } catch (err) { return fail(err); }
   },
@@ -471,8 +519,8 @@ server.registerTool(
       const wallet = getWalletByPrivateKey(pk);
       return ok(await addGuardian(getConfig({ network }), wallet, {
         caHash,
-        guardianToAdd: JSON.parse(guardianToAdd),
-        guardiansApproved: JSON.parse(guardiansApproved),
+        guardianToAdd: parseJson(guardianToAdd, GuardianToAddSchema, 'guardianToAdd'),
+        guardiansApproved: parseJson(guardiansApproved, GuardianApprovedSchema, 'guardiansApproved'),
         chainId,
       }));
     } catch (err) { return fail(err); }
@@ -501,8 +549,8 @@ server.registerTool(
       const wallet = getWalletByPrivateKey(pk);
       return ok(await removeGuardian(getConfig({ network }), wallet, {
         caHash,
-        guardianToRemove: JSON.parse(guardianToRemove),
-        guardiansApproved: JSON.parse(guardiansApproved),
+        guardianToRemove: parseJson(guardianToRemove, GuardianToRemoveSchema, 'guardianToRemove'),
+        guardiansApproved: parseJson(guardiansApproved, GuardianApprovedSchema, 'guardiansApproved'),
         chainId,
       }));
     } catch (err) { return fail(err); }
@@ -553,6 +601,7 @@ server.registerTool(
   },
   async ({ rpcUrl, contractAddress, methodName, params, network }) => {
     try {
+      validateRpcUrl(rpcUrl);
       return ok(await callContractViewMethod(getConfig({ network }), {
         rpcUrl, contractAddress, methodName, params: params ? JSON.parse(params) : undefined,
       }));

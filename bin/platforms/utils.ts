@@ -76,12 +76,29 @@ export function readJsonFile(filePath: string): Record<string, unknown> {
   return {};
 }
 
+/** Restricted system directories that should never be written to. */
+const FORBIDDEN_PREFIXES = ['/etc', '/usr', '/bin', '/sbin', '/var', '/boot', '/sys', '/proc'];
+
 export function writeJsonFile(filePath: string, data: unknown): void {
-  const dir = path.dirname(filePath);
+  const resolved = path.resolve(filePath);
+
+  // Guard: only allow .json files
+  if (!resolved.endsWith('.json')) {
+    throw new Error(`writeJsonFile only writes .json files, got: ${resolved}`);
+  }
+
+  // Guard: block system directories
+  for (const prefix of FORBIDDEN_PREFIXES) {
+    if (resolved.startsWith(prefix + '/') || resolved === prefix) {
+      throw new Error(`Refusing to write to system directory: ${resolved}`);
+    }
+  }
+
+  const dir = path.dirname(resolved);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf-8');
+  fs.writeFileSync(resolved, JSON.stringify(data, null, 2) + '\n', 'utf-8');
 }
 
 // ---------------------------------------------------------------------------

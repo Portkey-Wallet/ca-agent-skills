@@ -70,6 +70,9 @@ export { getApprovalCount } from './lib/types.js';
 // --- Wallet helpers ---
 export { createWallet, getWalletByPrivateKey } from './lib/aelf-client.js';
 
+// --- HTTP utilities ---
+export { HttpError, validateRpcUrl } from './lib/http.js';
+
 // --- Core: Account ---
 export {
   checkAccount,
@@ -77,6 +80,7 @@ export {
   getHolderInfo,
   getChainInfo,
   getChainInfoByChainId,
+  clearChainInfoCache,
 } from './src/core/account.js';
 
 // --- Core: Assets ---

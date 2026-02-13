@@ -89,10 +89,9 @@ export async function callViewMethod<T = unknown>(
   methodName: string,
   params?: Record<string, unknown>,
 ): Promise<T> {
-  // For view methods, use a deterministic default wallet (no signing needed)
-  const defaultWallet = getWalletByPrivateKey(
-    'e815acba8fcf085a0b4141060c13b8017a08da37f2eb1d6a5571f9f32e851f25',
-  );
+  // View methods don't require a real identity — use a random ephemeral wallet.
+  // NEVER hard-code a real private key here.
+  const defaultWallet = createWallet();
   const contract = await getContractInstance(rpcUrl, contractAddress, defaultWallet);
 
   const method = contract[methodName];

@@ -6,7 +6,7 @@ import type {
   VerifierItem,
   HolderInfo,
 } from '../../lib/types.js';
-import { createHttpClient } from '../../lib/http.js';
+import { createHttpClient, HttpError } from '../../lib/http.js';
 import { callViewMethod } from '../../lib/aelf-client.js';
 
 // ============================================================================
@@ -48,8 +48,13 @@ export async function checkAccount(
       originChainId: result.originChainId,
     };
   } catch (err: unknown) {
-    // If the account doesn't exist, the API returns an error
-    if (err instanceof Error && (err.message.includes('3002') || err.message.includes('not exist'))) {
+    // Account not found: prefer structured HttpError matching, fallback to message
+    if (err instanceof HttpError) {
+      if (err.statusCode === 404 || err.errorCode === '3002') {
+        return { isRegistered: false, originChainId: null };
+      }
+    } else if (err instanceof Error && (err.message.includes('3002') || err.message.includes('not exist'))) {
+      // Legacy fallback for non-HttpError paths
       return { isRegistered: false, originChainId: null };
     }
     throw err;
@@ -175,18 +180,33 @@ export async function getHolderInfo(
 // getChainInfo
 // ============================================================================
 
+// Process-level cache — ChainInfo is static config (endpoints, contract addresses),
+// does NOT contain block height. Safe to cache for the entire process lifetime.
+const chainInfoCache = new Map<string, ChainInfo[]>();
+
 /**
  * Get chain info for all available chains (RPC endpoints, contract addresses).
+ * Results are cached per apiUrl for the process lifetime.
  *
  * API: GET /api/app/search/chainsinfoindex
  */
 export async function getChainInfo(
   config: PortkeyConfig,
 ): Promise<ChainInfo[]> {
-  const http = createHttpClient(config);
+  const key = config.apiUrl;
+  const cached = chainInfoCache.get(key);
+  if (cached) return cached;
 
+  const http = createHttpClient(config);
   const result = await http.get<{ items: ChainInfo[] }>('/api/app/search/chainsinfoindex');
-  return result.items || [];
+  const data = result.items || [];
+  chainInfoCache.set(key, data);
+  return data;
+}
+
+/** Clear chain info cache (e.g. after config/network change). */
+export function clearChainInfoCache(): void {
+  chainInfoCache.clear();
 }
 
 /**

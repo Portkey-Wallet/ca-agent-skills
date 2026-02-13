@@ -38,17 +38,26 @@ export async function getTokenBalance(
   // The token contract address is the defaultToken.address on the chain
   const tokenContractAddress = chainInfo.defaultToken.address;
 
-  const result = await callViewMethod<{ symbol: string; owner: string; balance: string }>(
-    chainInfo.endPoint,
-    tokenContractAddress,
-    'GetBalance',
-    { symbol: params.symbol, owner: params.caAddress },
-  );
+  const [result, tokenInfo] = await Promise.all([
+    callViewMethod<{ symbol: string; owner: string; balance: string }>(
+      chainInfo.endPoint,
+      tokenContractAddress,
+      'GetBalance',
+      { symbol: params.symbol, owner: params.caAddress },
+    ),
+    // Fetch actual token info to get correct decimals (ELF=8, USDT=6, etc.)
+    callViewMethod<{ symbol: string; decimals: number }>(
+      chainInfo.endPoint,
+      tokenContractAddress,
+      'GetTokenInfo',
+      { symbol: params.symbol },
+    ).catch(() => null), // fallback to defaultToken.decimals if GetTokenInfo fails
+  ]);
 
   return {
     symbol: result.symbol || params.symbol,
     balance: result.balance || '0',
-    decimals: chainInfo.defaultToken.decimals,
+    decimals: tokenInfo?.decimals ?? chainInfo.defaultToken.decimals,
     tokenContractAddress,
   };
 }

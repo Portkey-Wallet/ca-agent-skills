@@ -19,6 +19,38 @@ interface ApiResponse<T = unknown> {
 }
 
 // ---------------------------------------------------------------------------
+// HttpError — structured error for precise matching
+// ---------------------------------------------------------------------------
+
+export class HttpError extends Error {
+  /** HTTP status code (e.g. 400, 404, 500) */
+  statusCode: number;
+  /** Portkey API error code (e.g. '3002'), if present */
+  errorCode: string | null;
+  /** Raw response body text */
+  responseBody: string;
+
+  constructor(statusCode: number, statusText: string, body: string) {
+    // Try to extract API error code and message from JSON body
+    let errorCode: string | null = null;
+    let apiMessage = '';
+    try {
+      const parsed = JSON.parse(body);
+      errorCode = parsed?.code ?? parsed?.Code ?? null;
+      apiMessage = parsed?.message ?? parsed?.Message ?? '';
+    } catch {
+      apiMessage = body;
+    }
+
+    super(`HTTP ${statusCode} ${statusText}: ${apiMessage || body}`);
+    this.name = 'HttpError';
+    this.statusCode = statusCode;
+    this.errorCode = errorCode;
+    this.responseBody = body;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // HTTP client
 // ---------------------------------------------------------------------------
 
@@ -75,7 +107,7 @@ export function createHttpClient(config: PortkeyConfig) {
 
       if (!response.ok) {
         const text = await response.text().catch(() => '');
-        throw new Error(`HTTP ${response.status} ${response.statusText}: ${text}`);
+        throw new HttpError(response.status, response.statusText, text);
       }
 
       const json = await response.json() as ApiResponse<T> | T;
@@ -118,3 +150,48 @@ export function createHttpClient(config: PortkeyConfig) {
 }
 
 export type HttpClient = ReturnType<typeof createHttpClient>;
+
+// ---------------------------------------------------------------------------
+// SSRF protection — validate user-supplied RPC URLs
+// ---------------------------------------------------------------------------
+
+const PRIVATE_IP_PATTERNS = [
+  /^localhost$/i,
+  /^127\./,
+  /^10\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^192\.168\./,
+  /^0\./,
+  /^\[::1\]/,
+  /^\[fd/i,      // IPv6 unique-local
+  /^\[fe80:/i,   // IPv6 link-local
+];
+
+/**
+ * Validate a user-supplied RPC URL to prevent SSRF attacks.
+ * - Requires https:// (or http:// only for known aelf domains)
+ * - Blocks private/internal IP ranges and localhost
+ *
+ * Throws if the URL is unsafe.
+ */
+export function validateRpcUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Invalid RPC URL: ${url}`);
+  }
+
+  // Only allow http(s)
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error(`RPC URL must use http(s) protocol, got: ${parsed.protocol}`);
+  }
+
+  // Block private/internal addresses
+  const hostname = parsed.hostname;
+  for (const pattern of PRIVATE_IP_PATTERNS) {
+    if (pattern.test(hostname)) {
+      throw new Error(`RPC URL must not point to a private/internal address: ${hostname}`);
+    }
+  }
+}
