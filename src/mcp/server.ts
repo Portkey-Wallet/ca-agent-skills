@@ -11,9 +11,10 @@ import { LoginType, OperationType } from '../../lib/types.js';
 import { checkAccount, getGuardianList, getHolderInfo, getChainInfo } from '../core/account.js';
 import { getTokenBalance, getTokenList, getNftCollections, getNftItems, getTokenPrice } from '../core/assets.js';
 import { getVerifierServer, sendVerificationCode, verifyCode, registerWallet, recoverWallet, checkRegisterOrRecoveryStatus } from '../core/auth.js';
-import { sameChainTransfer, crossChainTransfer, getTransactionResult } from '../core/transfer.js';
+import { sameChainTransfer, crossChainTransfer, recoverStuckTransfer, getTransactionResult } from '../core/transfer.js';
 import { addGuardian, removeGuardian } from '../core/guardian.js';
 import { callContractViewMethod, managerForwardCallWithKey } from '../core/contract.js';
+import { saveKeystore, unlockWallet, lockWallet, getWalletStatus, getUnlockedWallet } from '../core/keystore.js';
 
 // ---------------------------------------------------------------------------
 // Server setup
@@ -86,6 +87,21 @@ const GuardianToRemoveSchema = z.object({
     id: z.string(),
   }),
 });
+
+// ---------------------------------------------------------------------------
+// Wallet accessor: unlocked keystore > env var fallback
+// ---------------------------------------------------------------------------
+
+function requireWallet(): ReturnType<typeof getWalletByPrivateKey> {
+  const unlocked = getUnlockedWallet();
+  if (unlocked) return unlocked.wallet;
+  const pk = process.env.PORTKEY_PRIVATE_KEY;
+  if (pk) return getWalletByPrivateKey(pk);
+  throw new Error(
+    'Wallet not available. Either use portkey_unlock to unlock your keystore, ' +
+    'or set the PORTKEY_PRIVATE_KEY environment variable.',
+  );
+}
 
 // ---------------------------------------------------------------------------
 // 1. portkey_check_account
@@ -437,9 +453,7 @@ server.registerTool(
   },
   async ({ caHash, tokenContractAddress, symbol, to, amount, memo, chainId, network }) => {
     try {
-      const pk = process.env.PORTKEY_PRIVATE_KEY;
-      if (!pk) return fail(new Error('PORTKEY_PRIVATE_KEY env is required for transfers'));
-      const wallet = getWalletByPrivateKey(pk);
+      const wallet = requireWallet();
       return ok(await sameChainTransfer(getConfig({ network }), wallet, {
         caHash, tokenContractAddress, symbol, to, amount, memo, chainId,
       }));
@@ -467,9 +481,7 @@ server.registerTool(
   },
   async ({ caHash, tokenContractAddress, symbol, to, amount, toChainId, chainId, network }) => {
     try {
-      const pk = process.env.PORTKEY_PRIVATE_KEY;
-      if (!pk) return fail(new Error('PORTKEY_PRIVATE_KEY env is required for transfers'));
-      const wallet = getWalletByPrivateKey(pk);
+      const wallet = requireWallet();
       return ok(await crossChainTransfer(getConfig({ network }), wallet, {
         caHash, tokenContractAddress, symbol, to, amount, toChainId, chainId,
       }));
@@ -498,7 +510,34 @@ server.registerTool(
 );
 
 // ---------------------------------------------------------------------------
-// 19. portkey_add_guardian
+// 19. portkey_recover_stuck_transfer
+// ---------------------------------------------------------------------------
+server.registerTool(
+  'portkey_recover_stuck_transfer',
+  {
+    description: 'Recover tokens stuck on the Manager address after a failed cross-chain transfer. When crossChainTransfer Step 1 (CA→Manager) succeeds but Step 2 fails, tokens remain on the Manager. This tool transfers them back to the CA address.',
+    inputSchema: {
+      tokenContractAddress: z.string().describe('Token contract address'),
+      symbol: z.string().describe('Token symbol (e.g. ELF)'),
+      amount: z.string().describe('Amount in smallest unit'),
+      caAddress: z.string().describe('CA address to recover tokens to'),
+      chainId: CHAIN_ID,
+      memo: z.string().optional().describe('Optional memo'),
+      network: NETWORK,
+    },
+  },
+  async ({ tokenContractAddress, symbol, amount, caAddress, chainId, memo, network }) => {
+    try {
+      const wallet = requireWallet();
+      return ok(await recoverStuckTransfer(getConfig({ network }), wallet, {
+        tokenContractAddress, symbol, amount, caAddress, chainId, memo,
+      }));
+    } catch (err) { return fail(err); }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 20. portkey_add_guardian
 // ---------------------------------------------------------------------------
 server.registerTool(
   'portkey_add_guardian',
@@ -514,9 +553,7 @@ server.registerTool(
   },
   async ({ caHash, guardianToAdd, guardiansApproved, chainId, network }) => {
     try {
-      const pk = process.env.PORTKEY_PRIVATE_KEY;
-      if (!pk) return fail(new Error('PORTKEY_PRIVATE_KEY env is required'));
-      const wallet = getWalletByPrivateKey(pk);
+      const wallet = requireWallet();
       return ok(await addGuardian(getConfig({ network }), wallet, {
         caHash,
         guardianToAdd: parseJson(guardianToAdd, GuardianToAddSchema, 'guardianToAdd'),
@@ -528,7 +565,7 @@ server.registerTool(
 );
 
 // ---------------------------------------------------------------------------
-// 20. portkey_remove_guardian
+// 21. portkey_remove_guardian
 // ---------------------------------------------------------------------------
 server.registerTool(
   'portkey_remove_guardian',
@@ -544,9 +581,7 @@ server.registerTool(
   },
   async ({ caHash, guardianToRemove, guardiansApproved, chainId, network }) => {
     try {
-      const pk = process.env.PORTKEY_PRIVATE_KEY;
-      if (!pk) return fail(new Error('PORTKEY_PRIVATE_KEY env is required'));
-      const wallet = getWalletByPrivateKey(pk);
+      const wallet = requireWallet();
       return ok(await removeGuardian(getConfig({ network }), wallet, {
         caHash,
         guardianToRemove: parseJson(guardianToRemove, GuardianToRemoveSchema, 'guardianToRemove'),
@@ -558,7 +593,7 @@ server.registerTool(
 );
 
 // ---------------------------------------------------------------------------
-// 21. portkey_forward_call
+// 22. portkey_forward_call
 // ---------------------------------------------------------------------------
 server.registerTool(
   'portkey_forward_call',
@@ -575,17 +610,18 @@ server.registerTool(
   },
   async ({ caHash, contractAddress, methodName, args, chainId, network }) => {
     try {
-      const pk = process.env.PORTKEY_PRIVATE_KEY;
-      if (!pk) return fail(new Error('PORTKEY_PRIVATE_KEY env is required'));
-      return ok(await managerForwardCallWithKey(getConfig({ network }), pk, {
-        caHash, contractAddress, methodName, args: JSON.parse(args), chainId,
+      const wallet = requireWallet();
+      let parsedArgs: Record<string, unknown>;
+      try { parsedArgs = JSON.parse(args); } catch { throw new Error(`Invalid JSON for "args": ${args.slice(0, 200)}`); }
+      return ok(await managerForwardCallWithKey(getConfig({ network }), wallet.privateKey, {
+        caHash, contractAddress, methodName, args: parsedArgs, chainId,
       }));
     } catch (err) { return fail(err); }
   },
 );
 
 // ---------------------------------------------------------------------------
-// 22. portkey_view_call
+// 23. portkey_view_call
 // ---------------------------------------------------------------------------
 server.registerTool(
   'portkey_view_call',
@@ -602,8 +638,10 @@ server.registerTool(
   async ({ rpcUrl, contractAddress, methodName, params, network }) => {
     try {
       validateRpcUrl(rpcUrl);
+      let parsedParams: Record<string, unknown> | undefined;
+      if (params) { try { parsedParams = JSON.parse(params); } catch { throw new Error(`Invalid JSON for "params": ${params.slice(0, 200)}`); } }
       return ok(await callContractViewMethod(getConfig({ network }), {
-        rpcUrl, contractAddress, methodName, params: params ? JSON.parse(params) : undefined,
+        rpcUrl, contractAddress, methodName, params: parsedParams,
       }));
     } catch (err) { return fail(err); }
   },
@@ -615,11 +653,89 @@ server.registerTool(
 server.registerTool(
   'portkey_create_wallet',
   {
-    description: 'Create a new aelf wallet (manager keypair). Use when you need a fresh manager address for registration or recovery. Returns address, privateKey, and mnemonic. IMPORTANT: store the privateKey securely.',
+    description: 'Create a new aelf wallet (manager keypair). Use when you need a fresh manager address for registration or recovery. Returns address, privateKey, and mnemonic. IMPORTANT: after registration/recovery succeeds, use portkey_save_keystore to encrypt and persist the wallet.',
   },
   async () => {
     try {
       return ok(createWallet());
+    } catch (err) { return fail(err); }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 25. portkey_save_keystore
+// ---------------------------------------------------------------------------
+server.registerTool(
+  'portkey_save_keystore',
+  {
+    description: 'Encrypt and save the Manager wallet to a keystore file (~/.portkey/ca/). Use after registration or recovery is complete. The wallet is auto-unlocked after saving. The user must provide or confirm a password.',
+    inputSchema: {
+      password: z.string().min(1).describe('Password to encrypt the keystore'),
+      privateKey: z.string().describe('Manager private key (hex, from portkey_create_wallet)'),
+      mnemonic: z.string().describe('Manager mnemonic (from portkey_create_wallet)'),
+      caHash: z.string().describe('CA hash (from portkey_check_status)'),
+      caAddress: z.string().describe('CA address (from portkey_check_status)'),
+      originChainId: CHAIN_ID.default('AELF').describe('Origin chain ID where CA was created'),
+      network: NETWORK,
+    },
+  },
+  async ({ password, privateKey, mnemonic, caHash, caAddress, originChainId, network }) => {
+    try {
+      return ok(saveKeystore({
+        password, privateKey, mnemonic, caHash, caAddress, originChainId, network: network || 'mainnet',
+      }));
+    } catch (err) { return fail(err); }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 26. portkey_unlock
+// ---------------------------------------------------------------------------
+server.registerTool(
+  'portkey_unlock',
+  {
+    description: 'Unlock the encrypted keystore with a password. Loads the Manager wallet into memory for write operations. Use at the start of a new conversation if a keystore exists. Check portkey_wallet_status first to see if unlock is needed.',
+    inputSchema: {
+      password: z.string().min(1).describe('Keystore password'),
+      network: NETWORK,
+    },
+  },
+  async ({ password, network }) => {
+    try {
+      return ok(unlockWallet(password, network || 'mainnet'));
+    } catch (err) { return fail(err); }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 27. portkey_lock
+// ---------------------------------------------------------------------------
+server.registerTool(
+  'portkey_lock',
+  {
+    description: 'Lock the wallet — clear the Manager private key from memory. Use when done with write operations for security.',
+  },
+  async () => {
+    try {
+      return ok(lockWallet());
+    } catch (err) { return fail(err); }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 28. portkey_wallet_status
+// ---------------------------------------------------------------------------
+server.registerTool(
+  'portkey_wallet_status',
+  {
+    description: 'Check the wallet status: whether a keystore exists, whether it is unlocked, CA address, and manager address. Use at conversation start to determine if portkey_unlock is needed.',
+    inputSchema: {
+      network: NETWORK,
+    },
+  },
+  async ({ network }) => {
+    try {
+      return ok(getWalletStatus(network || 'mainnet'));
     } catch (err) { return fail(err); }
   },
 );

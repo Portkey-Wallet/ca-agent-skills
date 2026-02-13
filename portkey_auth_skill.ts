@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 import { Command } from 'commander';
 import { getConfig } from './lib/config.js';
-import { outputSuccess, outputError } from './cli-helpers.js';
+import { outputSuccess, outputError, safeJsonParse } from './cli-helpers.js';
 import { createWallet } from './lib/aelf-client.js';
+import { saveKeystore, unlockWallet, lockWallet, getWalletStatus } from './src/core/keystore.js';
 import {
   getVerifierServer,
   sendVerificationCode,
@@ -108,7 +109,7 @@ program.command('recover')
       const config = getConfig({ network: program.opts().network });
       outputSuccess(await recoverWallet(config, {
         email: opts.email, manager: opts.manager,
-        guardiansApproved: JSON.parse(opts.guardiansApproved), chainId: opts.chainId,
+        guardiansApproved: safeJsonParse(opts.guardiansApproved, 'guardians-approved') as any, chainId: opts.chainId,
       }));
     } catch (err: any) { outputError(err.message); }
   });
@@ -123,6 +124,49 @@ program.command('check-status')
       outputSuccess(await checkRegisterOrRecoveryStatus(config, {
         sessionId: opts.sessionId, type: opts.type,
       }));
+    } catch (err: any) { outputError(err.message); }
+  });
+
+program.command('save-keystore')
+  .description('Encrypt and save Manager wallet to keystore file')
+  .requiredOption('--password <pwd>', 'Password to encrypt')
+  .requiredOption('--private-key <key>', 'Manager private key (hex)')
+  .requiredOption('--mnemonic <words>', 'Manager mnemonic')
+  .requiredOption('--ca-hash <hash>', 'CA hash')
+  .requiredOption('--ca-address <addr>', 'CA address')
+  .option('--origin-chain-id <chainId>', 'Origin chain ID', 'AELF')
+  .action(async (opts) => {
+    try {
+      outputSuccess(saveKeystore({
+        password: opts.password, privateKey: opts.privateKey, mnemonic: opts.mnemonic,
+        caHash: opts.caHash, caAddress: opts.caAddress,
+        originChainId: opts.originChainId, network: program.opts().network || 'mainnet',
+      }));
+    } catch (err: any) { outputError(err.message); }
+  });
+
+program.command('unlock')
+  .description('Unlock the encrypted keystore with a password')
+  .requiredOption('--password <pwd>', 'Keystore password')
+  .action(async (opts) => {
+    try {
+      outputSuccess(unlockWallet(opts.password, program.opts().network || 'mainnet'));
+    } catch (err: any) { outputError(err.message); }
+  });
+
+program.command('lock')
+  .description('Lock the wallet (clear private key from memory)')
+  .action(async () => {
+    try {
+      outputSuccess(lockWallet());
+    } catch (err: any) { outputError(err.message); }
+  });
+
+program.command('wallet-status')
+  .description('Check wallet status (keystore exists, unlocked, CA info)')
+  .action(async () => {
+    try {
+      outputSuccess(getWalletStatus(program.opts().network || 'mainnet'));
     } catch (err: any) { outputError(err.message); }
   });
 

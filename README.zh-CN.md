@@ -14,9 +14,10 @@ ca-agent-skills/
 │   │   ├── account.ts          # 账户查询
 │   │   ├── auth.ts             # 注册/登录/验证
 │   │   ├── assets.ts           # 资产查询（Token、NFT、价格）
-│   │   ├── transfer.ts         # 同链/跨链转账
+│   │   ├── transfer.ts         # 同链/跨链转账、卡单恢复
 │   │   ├── guardian.ts         # Guardian 管理
-│   │   └── contract.ts         # 通用合约调用（ManagerForwardCall）
+│   │   ├── contract.ts         # 通用合约调用（ManagerForwardCall）
+│   │   └── keystore.ts         # 钱包加密持久化（save、unlock、lock）
 │   └── mcp/
 │       └── server.ts           # MCP 适配器 — Claude Desktop / Cursor / GPT
 ├── portkey_query_skill.ts      # CLI — 查询命令
@@ -50,16 +51,69 @@ ca-agent-skills/
 | 16 | 转账 | 同链转账 | `portkey_transfer` | `sameChainTransfer` |
 | 17 | 转账 | 跨链转账 | `portkey_cross_chain_transfer` | `crossChainTransfer` |
 | 18 | 转账 | 查询交易结果 | `portkey_tx_result` | `getTransactionResult` |
-| 19 | Guardian | 添加 Guardian | `portkey_add_guardian` | `addGuardian` |
-| 20 | Guardian | 移除 Guardian | `portkey_remove_guardian` | `removeGuardian` |
-| 21 | 合约 | 通用 ManagerForwardCall | `portkey_forward_call` | `managerForwardCall` |
-| 22 | 合约 | 只读合约调用 | `portkey_view_call` | `callContractViewMethod` |
-| 23 | 钱包 | 创建钱包 | `portkey_create_wallet` | `createWallet` |
+| 19 | 转账 | 跨链卡单恢复 | `portkey_recover_stuck_transfer` | `recoverStuckTransfer` |
+| 20 | Guardian | 添加 Guardian | `portkey_add_guardian` | `addGuardian` |
+| 21 | Guardian | 移除 Guardian | `portkey_remove_guardian` | `removeGuardian` |
+| 22 | 合约 | 通用 ManagerForwardCall | `portkey_forward_call` | `managerForwardCall` |
+| 23 | 合约 | 只读合约调用 | `portkey_view_call` | `callContractViewMethod` |
+| 24 | 钱包 | 创建钱包 | `portkey_create_wallet` | `createWallet` |
+| 25 | 钱包 | 保存 Keystore | `portkey_save_keystore` | `saveKeystore` |
+| 26 | 钱包 | 解锁钱包 | `portkey_unlock` | `unlockWallet` |
+| 27 | 钱包 | 锁定钱包 | `portkey_lock` | `lockWallet` |
+| 28 | 钱包 | 钱包状态 | `portkey_wallet_status` | `getWalletStatus` |
+
+## 钱包持久化（Keystore）
+
+Manager 私钥使用 aelf-sdk 内置的 keystore 方案（scrypt + AES-128-CTR）加密存储到本地。
+
+**存储路径：** `~/.portkey/ca/{network}.keystore.json`
+
+### 首次设置（注册/恢复成功后）
+
+```bash
+# AI 流程：create_wallet → register → check_status → save_keystore(密码)
+# 保存后自动解锁，当前对话可直接使用。
+```
+
+### 新对话
+
+```bash
+# AI 调用 portkey_wallet_status 检查是否存在 keystore
+# 如果已锁定，向用户索要密码 → portkey_unlock(密码)
+# 之后写操作自动生效
+```
+
+### CLI 手动操作
+
+```bash
+# 保存 keystore
+bun run portkey_auth_skill.ts save-keystore \
+  --password "你的密码" \
+  --private-key "hex私钥" \
+  --mnemonic "助记词" \
+  --ca-hash "xxx" --ca-address "ELF_xxx_AELF"
+
+# 解锁
+bun run portkey_auth_skill.ts unlock --password "你的密码"
+
+# 查看状态
+bun run portkey_auth_skill.ts wallet-status
+
+# 锁定
+bun run portkey_auth_skill.ts lock
+```
+
+### 工作原理
+
+1. **Save** — 用用户密码加密 Manager 私钥 + 助记词，写入 `~/.portkey/ca/`
+2. **Unlock** — 解密 keystore，将钱包加载到进程内存
+3. **Lock** — 清除内存中的私钥
+4. **写操作** — 优先使用已解锁的钱包；如果没有解锁的 keystore，fallback 到 `PORTKEY_PRIVATE_KEY` 环境变量
 
 ## 前置条件
 
 - [Bun](https://bun.sh) >= 1.0
-- aelf 钱包私钥（仅写操作需要）
+- aelf 钱包私钥或已解锁的 keystore（仅写操作需要）
 
 ## 快速开始
 
@@ -164,13 +218,26 @@ do {
 
 console.log('CA Address:', status.caAddress);
 console.log('CA Hash:', status.caHash);
+
+// 7. 保存 keystore（加密持久化 Manager 私钥）
+import { saveKeystore } from '@portkey/ca-agent-skills';
+saveKeystore({
+  password: 'user-chosen-password',
+  privateKey: wallet.privateKey,
+  mnemonic: wallet.mnemonic,
+  caHash: status.caHash!,
+  caAddress: status.caAddress!,
+  originChainId: 'AELF',
+  network: 'mainnet',
+});
+// 钱包已自动解锁，后续写操作无需再设置 PORTKEY_PRIVATE_KEY
 ```
 
 ## 环境变量
 
 | 变量 | 必需 | 默认值 | 说明 |
 |------|------|--------|------|
-| `PORTKEY_PRIVATE_KEY` | 写操作需要 | — | Manager 钱包私钥 |
+| `PORTKEY_PRIVATE_KEY` | Fallback | — | Manager 钱包私钥（keystore 未解锁时的 fallback） |
 | `PORTKEY_NETWORK` | 否 | `mainnet` | `mainnet` 或 `testnet` |
 | `PORTKEY_API_URL` | 否 | 按网络 | 覆盖 API 地址 |
 | `PORTKEY_GRAPHQL_URL` | 否 | 按网络 | 覆盖 GraphQL 地址 |
@@ -188,7 +255,10 @@ bun run test:e2e            # E2E 测试（需要私钥）
 
 - `.env` 文件已默认 git-ignore，不要提交
 - 私钥仅写操作需要（转账、Guardian 管理、合约调用）
-- MCP 模式下，私钥通过 `env` 块传递，不会通过网络传输
+- **Keystore 加密**：Manager 私钥使用 scrypt（N=8192）+ AES-128-CTR 加密，文件权限 `0600`
+- **内存生命周期**：私钥仅在 unlock 期间存在于内存，`portkey_lock` 立即清除
+- MCP 模式下，keystore 密码仅存在于 AI 对话上下文，不会写入磁盘
+- `PORTKEY_PRIVATE_KEY` 环境变量仍然支持作为 fallback，但推荐使用 keystore
 
 ## License
 

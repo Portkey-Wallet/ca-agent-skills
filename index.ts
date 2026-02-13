@@ -114,6 +114,7 @@ export {
 export {
   sameChainTransfer,
   crossChainTransfer,
+  recoverStuckTransfer,
   getTransactionResult,
 } from './src/core/transfer.js';
 
@@ -122,3 +123,14 @@ export {
   addGuardian,
   removeGuardian,
 } from './src/core/guardian.js';
+
+// --- Core: Keystore (wallet persistence) ---
+export {
+  saveKeystore,
+  unlockWallet,
+  lockWallet,
+  getWalletStatus,
+  getUnlockedWallet,
+  getKeystorePath,
+  clearKeystoreState,
+} from './src/core/keystore.js';

@@ -1,22 +1,25 @@
 #!/usr/bin/env bun
 import { Command } from 'commander';
 import { getConfig } from './lib/config.js';
-import { outputSuccess, outputError } from './cli-helpers.js';
-import { getWalletByPrivateKey } from './lib/aelf-client.js';
-import { sameChainTransfer, crossChainTransfer } from './src/core/transfer.js';
+import { outputSuccess, outputError, safeJsonParse } from './cli-helpers.js';
+import { getWalletByPrivateKey, type AElfWallet } from './lib/aelf-client.js';
+import { sameChainTransfer, crossChainTransfer, recoverStuckTransfer } from './src/core/transfer.js';
 import { addGuardian, removeGuardian } from './src/core/guardian.js';
 import { managerForwardCallWithKey } from './src/core/contract.js';
+import { getUnlockedWallet } from './src/core/keystore.js';
 
 const program = new Command();
 program.name('portkey-tx').version('1.0.0').description('Portkey wallet transaction & guardian tools')
   .option('--network <network>', 'mainnet or testnet', 'mainnet');
 
-function requirePrivateKey(): string {
+function requireWallet(): AElfWallet {
+  const unlocked = getUnlockedWallet();
+  if (unlocked) return unlocked.wallet;
   const pk = process.env.PORTKEY_PRIVATE_KEY;
   if (!pk) {
-    outputError('PORTKEY_PRIVATE_KEY environment variable is required for write operations');
+    outputError('Wallet not unlocked and PORTKEY_PRIVATE_KEY not set. Use "unlock" command or set env var.');
   }
-  return pk!;
+  return getWalletByPrivateKey(pk!);
 }
 
 program.command('transfer')
@@ -30,9 +33,8 @@ program.command('transfer')
   .requiredOption('--chain-id <chainId>', 'Chain ID')
   .action(async (opts) => {
     try {
-      const pk = requirePrivateKey();
+      const wallet = requireWallet();
       const config = getConfig({ network: program.opts().network });
-      const wallet = getWalletByPrivateKey(pk);
       outputSuccess(await sameChainTransfer(config, wallet, {
         caHash: opts.caHash, tokenContractAddress: opts.tokenContract,
         symbol: opts.symbol, to: opts.to, amount: opts.amount,
@@ -52,13 +54,32 @@ program.command('cross-chain-transfer')
   .requiredOption('--to-chain-id <chainId>', 'Target chain ID')
   .action(async (opts) => {
     try {
-      const pk = requirePrivateKey();
+      const wallet = requireWallet();
       const config = getConfig({ network: program.opts().network });
-      const wallet = getWalletByPrivateKey(pk);
       outputSuccess(await crossChainTransfer(config, wallet, {
         caHash: opts.caHash, tokenContractAddress: opts.tokenContract,
         symbol: opts.symbol, to: opts.to, amount: opts.amount,
         chainId: opts.chainId, toChainId: opts.toChainId,
+      }));
+    } catch (err: any) { outputError(err.message); }
+  });
+
+program.command('recover-stuck-transfer')
+  .description('Recover tokens stuck on Manager after failed cross-chain transfer')
+  .requiredOption('--token-contract <addr>', 'Token contract address')
+  .requiredOption('--symbol <symbol>', 'Token symbol')
+  .requiredOption('--amount <amount>', 'Amount in smallest unit')
+  .requiredOption('--ca-address <addr>', 'CA address to recover tokens to')
+  .requiredOption('--chain-id <chainId>', 'Chain ID')
+  .option('--memo <memo>', 'Optional memo')
+  .action(async (opts) => {
+    try {
+      const wallet = requireWallet();
+      const config = getConfig({ network: program.opts().network });
+      outputSuccess(await recoverStuckTransfer(config, wallet, {
+        tokenContractAddress: opts.tokenContract, symbol: opts.symbol,
+        amount: opts.amount, caAddress: opts.caAddress, chainId: opts.chainId,
+        memo: opts.memo,
       }));
     } catch (err: any) { outputError(err.message); }
   });
@@ -71,13 +92,12 @@ program.command('add-guardian')
   .requiredOption('--chain-id <chainId>', 'Chain ID')
   .action(async (opts) => {
     try {
-      const pk = requirePrivateKey();
+      const wallet = requireWallet();
       const config = getConfig({ network: program.opts().network });
-      const wallet = getWalletByPrivateKey(pk);
       outputSuccess(await addGuardian(config, wallet, {
         caHash: opts.caHash,
-        guardianToAdd: JSON.parse(opts.guardianToAdd),
-        guardiansApproved: JSON.parse(opts.guardiansApproved),
+        guardianToAdd: safeJsonParse(opts.guardianToAdd, 'guardian-to-add'),
+        guardiansApproved: safeJsonParse(opts.guardiansApproved, 'guardians-approved') as any,
         chainId: opts.chainId,
       }));
     } catch (err: any) { outputError(err.message); }
@@ -91,13 +111,12 @@ program.command('remove-guardian')
   .requiredOption('--chain-id <chainId>', 'Chain ID')
   .action(async (opts) => {
     try {
-      const pk = requirePrivateKey();
+      const wallet = requireWallet();
       const config = getConfig({ network: program.opts().network });
-      const wallet = getWalletByPrivateKey(pk);
       outputSuccess(await removeGuardian(config, wallet, {
         caHash: opts.caHash,
-        guardianToRemove: JSON.parse(opts.guardianToRemove),
-        guardiansApproved: JSON.parse(opts.guardiansApproved),
+        guardianToRemove: safeJsonParse(opts.guardianToRemove, 'guardian-to-remove'),
+        guardiansApproved: safeJsonParse(opts.guardiansApproved, 'guardians-approved') as any,
         chainId: opts.chainId,
       }));
     } catch (err: any) { outputError(err.message); }
@@ -112,11 +131,11 @@ program.command('forward-call')
   .requiredOption('--chain-id <chainId>', 'Chain ID')
   .action(async (opts) => {
     try {
-      const pk = requirePrivateKey();
+      const wallet = requireWallet();
       const config = getConfig({ network: program.opts().network });
-      outputSuccess(await managerForwardCallWithKey(config, pk, {
+      outputSuccess(await managerForwardCallWithKey(config, wallet.privateKey, {
         caHash: opts.caHash, contractAddress: opts.contractAddress,
-        methodName: opts.methodName, args: JSON.parse(opts.args), chainId: opts.chainId,
+        methodName: opts.methodName, args: safeJsonParse(opts.args, 'args'), chainId: opts.chainId,
       }));
     } catch (err: any) { outputError(err.message); }
   });

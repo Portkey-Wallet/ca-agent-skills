@@ -43,6 +43,11 @@ export async function checkAccount(
     const result = await http.get<{ originChainId: ChainId }>('/api/app/account/registerInfo', {
       params: { loginGuardianIdentifier: params.email },
     });
+    // Defensive: API should always return originChainId for registered accounts,
+    // but guard against unexpected null/undefined responses.
+    if (!result || !result.originChainId) {
+      return { isRegistered: false, originChainId: null };
+    }
     return {
       isRegistered: true,
       originChainId: result.originChainId,

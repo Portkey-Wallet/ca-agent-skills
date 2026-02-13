@@ -11,3 +11,16 @@ export function outputError(message: string): void {
   console.error(`[ERROR] ${message}`);
   process.exit(1);
 }
+
+/**
+ * Safe JSON.parse with a user-friendly error message.
+ * Use this for all CLI options that accept JSON strings.
+ */
+export function safeJsonParse(raw: string, paramName: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    outputError(`Invalid JSON for --${paramName}: ${raw.slice(0, 200)}`);
+    return undefined; // unreachable — outputError exits
+  }
+}

@@ -35,7 +35,9 @@ export async function getTokenBalance(
 
   const chainInfo = await getChainInfoByChainId(config, params.chainId);
 
-  // The token contract address is the defaultToken.address on the chain
+  // On aelf, ALL fungible tokens (ELF, USDT, etc.) live in the same MultiToken
+  // contract. chainInfo.defaultToken.address IS the MultiToken contract address,
+  // so this works for any symbol — not just the default token.
   const tokenContractAddress = chainInfo.defaultToken.address;
 
   const [result, tokenInfo] = await Promise.all([

@@ -1,11 +1,12 @@
 #!/usr/bin/env bun
 import { Command } from 'commander';
 import { getConfig } from './lib/config.js';
-import { outputSuccess, outputError } from './cli-helpers.js';
+import { outputSuccess, outputError, safeJsonParse } from './cli-helpers.js';
 import { checkAccount, getGuardianList, getHolderInfo, getChainInfo } from './src/core/account.js';
 import { getTokenBalance, getTokenList, getNftCollections, getNftItems, getTokenPrice } from './src/core/assets.js';
 import { callContractViewMethod } from './src/core/contract.js';
 import { getTransactionResult } from './src/core/transfer.js';
+import { validateRpcUrl } from './lib/http.js';
 
 const program = new Command();
 program.name('portkey-query').version('1.0.0').description('Portkey wallet query tools')
@@ -76,7 +77,7 @@ program.command('token-list')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
-      outputSuccess(await getTokenList(config, { caAddressInfos: JSON.parse(opts.caAddressInfos) }));
+      outputSuccess(await getTokenList(config, { caAddressInfos: safeJsonParse(opts.caAddressInfos, 'ca-address-infos') as any }));
     } catch (err: any) { outputError(err.message); }
   });
 
@@ -86,7 +87,7 @@ program.command('nft-collections')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
-      outputSuccess(await getNftCollections(config, { caAddressInfos: JSON.parse(opts.caAddressInfos) }));
+      outputSuccess(await getNftCollections(config, { caAddressInfos: safeJsonParse(opts.caAddressInfos, 'ca-address-infos') as any }));
     } catch (err: any) { outputError(err.message); }
   });
 
@@ -98,7 +99,7 @@ program.command('nft-items')
     try {
       const config = getConfig({ network: program.opts().network });
       outputSuccess(await getNftItems(config, {
-        caAddressInfos: JSON.parse(opts.caAddressInfos), symbol: opts.symbol,
+        caAddressInfos: safeJsonParse(opts.caAddressInfos, 'ca-address-infos') as any, symbol: opts.symbol,
       }));
     } catch (err: any) { outputError(err.message); }
   });
@@ -123,10 +124,11 @@ program.command('view-call')
   .option('--params <json>', 'JSON parameters')
   .action(async (opts) => {
     try {
+      validateRpcUrl(opts.rpcUrl);
       const config = getConfig({ network: program.opts().network });
       outputSuccess(await callContractViewMethod(config, {
         rpcUrl: opts.rpcUrl, contractAddress: opts.contractAddress,
-        methodName: opts.methodName, params: opts.params ? JSON.parse(opts.params) : undefined,
+        methodName: opts.methodName, params: opts.params ? safeJsonParse(opts.params, 'params') : undefined,
       }));
     } catch (err: any) { outputError(err.message); }
   });

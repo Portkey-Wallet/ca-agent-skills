@@ -59,7 +59,7 @@
     },
     {
       "name": "portkey-auth-create-wallet",
-      "description": "Create a new manager wallet",
+      "description": "Create a new manager wallet. After registration/recovery succeeds, use portkey-auth-save-keystore to persist it.",
       "command": "bun run portkey_auth_skill.ts create-wallet"
     },
     {
@@ -74,6 +74,32 @@
       "description": "Check registration/recovery status",
       "command": "bun run portkey_auth_skill.ts check-status",
       "args": ["--session-id", "--type"],
+      "options": ["--network"]
+    },
+    {
+      "name": "portkey-auth-save-keystore",
+      "description": "Encrypt and save Manager wallet to keystore file (~/.portkey/ca/)",
+      "command": "bun run portkey_auth_skill.ts save-keystore",
+      "args": ["--password", "--private-key", "--mnemonic", "--ca-hash", "--ca-address"],
+      "options": ["--origin-chain-id", "--network"]
+    },
+    {
+      "name": "portkey-auth-unlock",
+      "description": "Unlock the encrypted keystore with a password",
+      "command": "bun run portkey_auth_skill.ts unlock",
+      "args": ["--password"],
+      "options": ["--network"]
+    },
+    {
+      "name": "portkey-auth-lock",
+      "description": "Lock the wallet (clear private key from memory)",
+      "command": "bun run portkey_auth_skill.ts lock",
+      "options": ["--network"]
+    },
+    {
+      "name": "portkey-auth-wallet-status",
+      "description": "Check wallet status (keystore exists, unlocked, CA info)",
+      "command": "bun run portkey_auth_skill.ts wallet-status",
       "options": ["--network"]
     },
     {
@@ -138,6 +164,13 @@
       "command": "bun run portkey_tx_skill.ts cross-chain-transfer",
       "args": ["--ca-hash", "--token-contract", "--symbol", "--to", "--amount", "--chain-id", "--to-chain-id"],
       "options": ["--network"]
+    },
+    {
+      "name": "portkey-tx-recover-stuck-transfer",
+      "description": "Recover tokens stuck on Manager after failed cross-chain transfer",
+      "command": "bun run portkey_tx_skill.ts recover-stuck-transfer",
+      "args": ["--token-contract", "--symbol", "--amount", "--ca-address", "--chain-id"],
+      "options": ["--memo", "--network"]
     },
     {
       "name": "portkey-tx-add-guardian",

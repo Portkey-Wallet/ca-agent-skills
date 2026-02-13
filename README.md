@@ -14,9 +14,10 @@ ca-agent-skills/
 │   │   ├── account.ts          # checkAccount, getGuardianList, getHolderInfo, getChainInfo
 │   │   ├── auth.ts             # sendVerificationCode, verifyCode, registerWallet, recoverWallet
 │   │   ├── assets.ts           # getTokenBalance, getTokenList, getNftCollections, getNftItems, getTokenPrice
-│   │   ├── transfer.ts         # sameChainTransfer, crossChainTransfer, getTransactionResult
+│   │   ├── transfer.ts         # sameChainTransfer, crossChainTransfer, recoverStuckTransfer
 │   │   ├── guardian.ts         # addGuardian, removeGuardian
-│   │   └── contract.ts         # managerForwardCall, callContractViewMethod
+│   │   ├── contract.ts         # managerForwardCall, callContractViewMethod
+│   │   └── keystore.ts         # Encrypted wallet persistence (save, unlock, lock)
 │   └── mcp/
 │       └── server.ts           # MCP adapter — for Claude Desktop, Cursor, GPT, etc.
 ├── portkey_query_skill.ts      # CLI adapter — query commands
@@ -57,16 +58,69 @@ ca-agent-skills/
 | 16 | Transfer | Same-chain transfer | `portkey_transfer` | `transfer` | `sameChainTransfer` |
 | 17 | Transfer | Cross-chain transfer | `portkey_cross_chain_transfer` | `cross-chain-transfer` | `crossChainTransfer` |
 | 18 | Transfer | Transaction result | `portkey_tx_result` | `tx-result` | `getTransactionResult` |
-| 19 | Guardian | Add guardian | `portkey_add_guardian` | `add-guardian` | `addGuardian` |
-| 20 | Guardian | Remove guardian | `portkey_remove_guardian` | `remove-guardian` | `removeGuardian` |
-| 21 | Contract | ManagerForwardCall | `portkey_forward_call` | `forward-call` | `managerForwardCall` |
-| 22 | Contract | View method call | `portkey_view_call` | `view-call` | `callContractViewMethod` |
-| 23 | Wallet | Create wallet | `portkey_create_wallet` | `create-wallet` | `createWallet` |
+| 19 | Transfer | Recover stuck transfer | `portkey_recover_stuck_transfer` | `recover-stuck-transfer` | `recoverStuckTransfer` |
+| 20 | Guardian | Add guardian | `portkey_add_guardian` | `add-guardian` | `addGuardian` |
+| 21 | Guardian | Remove guardian | `portkey_remove_guardian` | `remove-guardian` | `removeGuardian` |
+| 22 | Contract | ManagerForwardCall | `portkey_forward_call` | `forward-call` | `managerForwardCall` |
+| 23 | Contract | View method call | `portkey_view_call` | `view-call` | `callContractViewMethod` |
+| 24 | Wallet | Create wallet | `portkey_create_wallet` | `create-wallet` | `createWallet` |
+| 25 | Wallet | Save keystore | `portkey_save_keystore` | `save-keystore` | `saveKeystore` |
+| 26 | Wallet | Unlock wallet | `portkey_unlock` | `unlock` | `unlockWallet` |
+| 27 | Wallet | Lock wallet | `portkey_lock` | `lock` | `lockWallet` |
+| 28 | Wallet | Wallet status | `portkey_wallet_status` | `wallet-status` | `getWalletStatus` |
+
+## Wallet Persistence (Keystore)
+
+Manager private keys are encrypted and stored locally using aelf-sdk's keystore scheme (scrypt + AES-128-CTR).
+
+**Storage location:** `~/.portkey/ca/{network}.keystore.json`
+
+### First-time setup (after registration/recovery)
+
+```bash
+# AI flow: create_wallet → register → check_status → save_keystore(password)
+# The wallet is auto-unlocked after saving.
+```
+
+### New conversation
+
+```bash
+# AI calls portkey_wallet_status to check if keystore exists
+# If locked, asks user for password → portkey_unlock(password)
+# Write operations now work automatically
+```
+
+### Manual CLI usage
+
+```bash
+# Save keystore
+bun run portkey_auth_skill.ts save-keystore \
+  --password "your-password" \
+  --private-key "hex-key" \
+  --mnemonic "word1 word2 ..." \
+  --ca-hash "xxx" --ca-address "ELF_xxx_AELF"
+
+# Unlock
+bun run portkey_auth_skill.ts unlock --password "your-password"
+
+# Check status
+bun run portkey_auth_skill.ts wallet-status
+
+# Lock
+bun run portkey_auth_skill.ts lock
+```
+
+### How it works
+
+1. **Save** — encrypts the Manager private key + mnemonic with a user-provided password, writes to `~/.portkey/ca/`
+2. **Unlock** — decrypts the keystore, loads the wallet into memory for the current process
+3. **Lock** — clears the private key from memory
+4. **Write operations** — automatically use the unlocked wallet; falls back to `PORTKEY_PRIVATE_KEY` env var if no keystore is unlocked
 
 ## Prerequisites
 
 - [Bun](https://bun.sh) >= 1.0
-- An aelf wallet private key (for write operations only)
+- An aelf wallet private key or an unlocked keystore (for write operations only)
 
 ## Quick Start
 
@@ -188,7 +242,7 @@ const balance = await getTokenBalance(config, {
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `PORTKEY_PRIVATE_KEY` | For writes | — | Manager wallet private key |
+| `PORTKEY_PRIVATE_KEY` | Fallback | — | Manager wallet private key (fallback if keystore not unlocked) |
 | `PORTKEY_NETWORK` | No | `mainnet` | `mainnet` or `testnet` |
 | `PORTKEY_API_URL` | No | Per network | Override API endpoint |
 | `PORTKEY_GRAPHQL_URL` | No | Per network | Override GraphQL endpoint |
@@ -205,8 +259,11 @@ bun run test:e2e            # E2E (requires private key)
 ## Security
 
 - Never commit your `.env` file (git-ignored by default)
-- Private keys are only needed for write operations
-- When using MCP, pass the private key via the `env` block — it is not transmitted over the network
+- Private keys are only needed for write operations (transfer, guardian management, contract calls)
+- **Keystore encryption**: Manager private keys are encrypted with scrypt (N=8192) + AES-128-CTR via aelf-sdk's keystore module. Files are stored with `0600` permissions.
+- **In-memory lifecycle**: private keys exist in memory only while unlocked; `portkey_lock` clears them immediately
+- When using MCP, the keystore password only exists in the AI conversation context — it is never written to disk
+- `PORTKEY_PRIVATE_KEY` env var is supported as a fallback but keystore is the recommended approach
 
 ## License
 

@@ -54,3 +54,50 @@ declare module 'aelf-sdk' {
 
   export default AElf;
 }
+
+declare module 'aelf-sdk/src/util/keyStore.js' {
+  interface KeystoreWalletInfo {
+    privateKey: string;
+    mnemonic: string;
+    address?: string;
+    nickName?: string;
+  }
+
+  interface KeystoreObject {
+    version: number;
+    type: string;
+    nickName?: string;
+    address: string;
+    crypto: {
+      cipher: string;
+      ciphertext: string;
+      cipherparams: { iv: string };
+      mnemonicEncrypted: string;
+      kdf: string;
+      kdfparams: {
+        r: number;
+        n: number;
+        p: number;
+        dklen: number;
+        salt: string;
+      };
+      mac: string;
+    };
+  }
+
+  export function getKeystore(
+    walletInfo: KeystoreWalletInfo,
+    password: string,
+    option?: Record<string, unknown>,
+  ): KeystoreObject;
+
+  export function unlockKeystore(
+    keyStore: KeystoreObject | Record<string, unknown>,
+    password: string,
+  ): KeystoreWalletInfo;
+
+  export function checkPassword(
+    keyStore: KeystoreObject | Record<string, unknown>,
+    password: string,
+  ): boolean;
+}
