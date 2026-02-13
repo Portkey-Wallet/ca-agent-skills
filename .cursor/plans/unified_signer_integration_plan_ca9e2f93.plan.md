@@ -4,19 +4,19 @@ overview: 通过创建共享的 AelfSigner 接口，让 EOA 和 CA 钱包都能�
 todos:
   - id: create-signer-pkg
     content: "创建 @portkey/aelf-signer 共享包: AelfSigner 接口 + EoaSigner + CaSigner + createSignerFromEnv() 工厂函数"
-    status: pending
+    status: completed
   - id: refactor-awaken
-    content: "改造 awaken-agent-skills: lib/aelf-client.ts + src/core/trade.ts + src/mcp/server.ts, wallet->signer"
-    status: pending
+    content: "改造 awaken-agent-skills: lib/aelf-client.ts + src/core/trade.ts + src/mcp/server.ts, wallet->signer (115 tests pass)"
+    status: completed
   - id: refactor-eforest
-    content: "改造 eforest-agent-skills: lib/aelf-client.ts + lib/types.ts + lib/config.ts + src/core/*.ts + lib/api-client.ts"
-    status: pending
+    content: "改造 eforest-agent-skills: lib/aelf-client.ts + lib/types.ts + lib/config.ts + src/core/*.ts (91 tests pass)"
+    status: completed
   - id: adapt-eoa-ca
-    content: "eoa-agent-skills 和 ca-agent-skills 可选适配: 导出 createEoaSigner/createCaSigner 便捷方法"
-    status: pending
+    content: "eoa-agent-skills 和 ca-agent-skills 适配: 导出 createSignerFromWallet/createSignerFromCaWallet 便捷方法"
+    status: completed
   - id: docs-examples
-    content: 更新各 skill 的 README + MCP 配置示例 (EOA 模式 / CA 模式)
-    status: pending
+    content: 更新各 skill 的 README + MCP 配置示例 (EOA 模式 / CA 模式) + .env.example
+    status: completed
 isProject: false
 ---
 
