@@ -287,3 +287,33 @@ export function getUnlockedWallet(): UnlockedWalletState | null {
 export function clearKeystoreState(): void {
   unlockedState = null;
 }
+
+// ---------------------------------------------------------------------------
+// AelfSigner bridge — create signer for use with DApp skills
+// ---------------------------------------------------------------------------
+
+import { createCaSigner, createSignerFromEnv, type AelfSigner } from '@portkey/aelf-signer';
+
+/**
+ * Create an AelfSigner (CaSigner) from the current CA wallet state.
+ *
+ * Resolution order:
+ *   1. Unlocked keystore in memory → CaSigner
+ *   2. Environment variables (PORTKEY_PRIVATE_KEY + PORTKEY_CA_HASH + PORTKEY_CA_ADDRESS) → auto-detect
+ *
+ * The returned signer can be used with awaken-agent-skills / eforest-agent-skills
+ * to execute DApp operations (swap, liquidity, token creation, etc.) using the
+ * Portkey CA wallet.
+ */
+export function createSignerFromCaWallet(): AelfSigner {
+  const unlocked = getUnlockedWallet();
+  if (unlocked) {
+    return createCaSigner({
+      managerPrivateKey: unlocked.wallet.privateKey,
+      caHash: unlocked.caHash,
+      caAddress: unlocked.caAddress,
+    });
+  }
+  // Fallback to env-based detection
+  return createSignerFromEnv();
+}

@@ -133,4 +133,13 @@ export {
   getUnlockedWallet,
   getKeystorePath,
   clearKeystoreState,
+  createSignerFromCaWallet,
 } from './src/core/keystore.js';
+
+// --- AelfSigner integration (for use with awaken/eforest DApp skills) ---
+export type { AelfSigner } from '@portkey/aelf-signer';
+export {
+  createCaSigner,
+  createSignerFromEnv,
+  CaSigner,
+} from '@portkey/aelf-signer';
