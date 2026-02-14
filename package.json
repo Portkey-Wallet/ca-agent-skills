@@ -9,7 +9,7 @@
     "./mcp": "./src/mcp/server.ts"
   },
   "bin": {
-    "portkey-setup": "./bin/setup.ts"
+    "portkey-setup": "./bin/setup.js"
   },
   "files": [
     "index.ts",
