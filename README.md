@@ -3,7 +3,7 @@
 > AI Agent toolkit for [Portkey Wallet](https://portkey.finance) on the [aelf](https://aelf.com) blockchain — Email registration, login, transfers, guardian management, and generic contract calls.
 
 [中文文档](./README.zh-CN.md)
-[![Unit Tests](https://github.com/Portkey-Wallet/ca-agent-skills/actions/workflows/publish.yml/badge.svg)](https://github.com/Portkey-Wallet/ca-agent-skills/actions/workflows/publish.yml)
+[![Unit Tests](https://github.com/Portkey-Wallet/ca-agent-skills/actions/workflows/test.yml/badge.svg)](https://github.com/Portkey-Wallet/ca-agent-skills/actions/workflows/test.yml)
 [![Coverage](https://codecov.io/gh/Portkey-Wallet/ca-agent-skills/graph/badge.svg)](https://codecov.io/gh/Portkey-Wallet/ca-agent-skills)
 
 ## Architecture
