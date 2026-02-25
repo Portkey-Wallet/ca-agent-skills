@@ -37,6 +37,7 @@
     "mcp": "bun run src/mcp/server.ts",
     "test": "bun test __tests__/",
     "test:unit": "bun test __tests__/unit/",
+    "test:unit:coverage": "bun run test:unit --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir=coverage",
     "test:integration": "bun test __tests__/integration/",
     "test:e2e": "bun test __tests__/e2e/"
   },
