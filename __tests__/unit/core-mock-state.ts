@@ -5,15 +5,53 @@ export class MockHttpError extends Error {
   errorCode: string | null;
   responseBody: string;
 
-  constructor(statusCode: number, message: string, body = '') {
-    super(message);
+  constructor(statusCode: number, statusText: string, body = '') {
+    let errorCode: string | null = null;
+    let apiMessage = '';
+    try {
+      const parsed = JSON.parse(body);
+      errorCode = parsed?.code ?? parsed?.Code ?? null;
+      apiMessage = parsed?.message ?? parsed?.Message ?? '';
+    } catch {
+      apiMessage = body;
+    }
+
+    super(`HTTP ${statusCode} ${statusText}: ${apiMessage || body}`);
+    this.name = 'HttpError';
     this.statusCode = statusCode;
     this.responseBody = body;
-    try {
-      const parsed = body ? JSON.parse(body) : null;
-      this.errorCode = parsed?.code ?? null;
-    } catch {
-      this.errorCode = null;
+    this.errorCode = errorCode;
+  }
+}
+
+const PRIVATE_IP_PATTERNS = [
+  /^localhost$/i,
+  /^127\./,
+  /^10\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^192\.168\./,
+  /^0\./,
+  /^\[::1\]/,
+  /^\[fd/i,
+  /^\[fe80:/i,
+];
+
+function mockValidateRpcUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Invalid RPC URL: ${url}`);
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error(`RPC URL must use http(s) protocol, got: ${parsed.protocol}`);
+  }
+
+  const hostname = parsed.hostname;
+  for (const pattern of PRIVATE_IP_PATTERNS) {
+    if (pattern.test(hostname)) {
+      throw new Error(`RPC URL must not point to a private/internal address: ${hostname}`);
     }
   }
 }
@@ -110,7 +148,7 @@ export function installCoreModuleMocks(): void {
       },
     }),
     HttpError: MockHttpError,
-    validateRpcUrl: () => {},
+    validateRpcUrl: mockValidateRpcUrl,
   }));
 
   mock.module('../../lib/aelf-client.js', () => ({
