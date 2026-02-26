@@ -110,6 +110,7 @@ export function installCoreModuleMocks(): void {
       },
     }),
     HttpError: MockHttpError,
+    validateRpcUrl: () => {},
   }));
 
   mock.module('../../lib/aelf-client.js', () => ({
