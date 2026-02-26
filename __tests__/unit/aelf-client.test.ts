@@ -1,5 +1,16 @@
-import { describe, it, expect } from 'bun:test';
-import { createWallet, getWalletByPrivateKey, clearCaches } from '../../lib/aelf-client';
+import { beforeAll, describe, expect, it } from 'bun:test';
+
+let createWallet: typeof import('../../lib/aelf-client.js').createWallet;
+let getWalletByPrivateKey: typeof import('../../lib/aelf-client.js').getWalletByPrivateKey;
+let clearCaches: typeof import('../../lib/aelf-client.js').clearCaches;
+
+beforeAll(async () => {
+  // Load the real module instance even when other tests mock '../../lib/aelf-client.js'.
+  const real = await import('../../lib/aelf-client.js?real');
+  createWallet = real.createWallet;
+  getWalletByPrivateKey = real.getWalletByPrivateKey;
+  clearCaches = real.clearCaches;
+});
 
 describe('lib/aelf-client', () => {
   describe('createWallet', () => {

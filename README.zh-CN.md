@@ -3,8 +3,8 @@
 > [Portkey Wallet](https://portkey.finance) 的 AI Agent 工具包，基于 [aelf](https://aelf.com) 区块链 — 支持 Email 注册/登录、转账、Guardian 管理和通用合约调用。
 
 [English](./README.md)
-[![Unit Tests](https://github.com/Portkey-Wallet/ca-agent-skills/actions/workflows/publish.yml/badge.svg)](https://github.com/Portkey-Wallet/ca-agent-skills/actions/workflows/publish.yml)
-[![Coverage](https://codecov.io/gh/Portkey-Wallet/ca-agent-skills/graph/badge.svg)](https://codecov.io/gh/Portkey-Wallet/ca-agent-skills)
+[![Unit Tests](https://github.com/Portkey-Wallet/ca-agent-skills/actions/workflows/test.yml/badge.svg)](https://github.com/Portkey-Wallet/ca-agent-skills/actions/workflows/test.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://Portkey-Wallet.github.io/ca-agent-skills/coverage.json)](https://Portkey-Wallet.github.io/ca-agent-skills/coverage.json)
 
 ## 架构
 
