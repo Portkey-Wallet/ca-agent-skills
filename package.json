@@ -55,6 +55,6 @@
     "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@types/bun": "^1.1.0"
+    "@types/bun": "latest"
   }
 }
