@@ -15,6 +15,7 @@ import { sameChainTransfer, crossChainTransfer, recoverStuckTransfer, getTransac
 import { addGuardian, removeGuardian } from '../core/guardian.js';
 import { callContractViewMethod, managerForwardCallWithKey } from '../core/contract.js';
 import { saveKeystore, unlockWallet, lockWallet, getWalletStatus, getUnlockedWallet } from '../core/keystore.js';
+import { SkillError } from '../core/errors.js';
 
 // ---------------------------------------------------------------------------
 // Server setup
@@ -31,6 +32,7 @@ const server = new McpServer({
 
 const CHAIN_ID = z.enum(['AELF', 'tDVV', 'tDVW']).describe('aelf chain ID');
 const NETWORK = z.enum(['mainnet', 'testnet']).default('mainnet').describe('Portkey network');
+const JSON_PREVIEW_MAX_CHARS = 200;
 
 function ok(data: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
@@ -47,7 +49,7 @@ function parseJson<T>(raw: string, schema: z.ZodType<T>, label: string): T {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new Error(`Invalid JSON for ${label}: ${raw.slice(0, 200)}`);
+    throw new SkillError('INVALID_PARAMS', `Invalid JSON for ${label}: ${raw.slice(0, JSON_PREVIEW_MAX_CHARS)}`);
   }
   return schema.parse(parsed);
 }
@@ -612,7 +614,7 @@ server.registerTool(
     try {
       const wallet = requireWallet();
       let parsedArgs: Record<string, unknown>;
-      try { parsedArgs = JSON.parse(args); } catch { throw new Error(`Invalid JSON for "args": ${args.slice(0, 200)}`); }
+      try { parsedArgs = JSON.parse(args); } catch { throw new SkillError('INVALID_PARAMS', `Invalid JSON for "args": ${args.slice(0, JSON_PREVIEW_MAX_CHARS)}`); }
       return ok(await managerForwardCallWithKey(getConfig({ network }), wallet.privateKey, {
         caHash, contractAddress, methodName, args: parsedArgs, chainId,
       }));
@@ -639,7 +641,7 @@ server.registerTool(
     try {
       validateRpcUrl(rpcUrl);
       let parsedParams: Record<string, unknown> | undefined;
-      if (params) { try { parsedParams = JSON.parse(params); } catch { throw new Error(`Invalid JSON for "params": ${params.slice(0, 200)}`); } }
+      if (params) { try { parsedParams = JSON.parse(params); } catch { throw new SkillError('INVALID_PARAMS', `Invalid JSON for "params": ${params.slice(0, JSON_PREVIEW_MAX_CHARS)}`); } }
       return ok(await callContractViewMethod(getConfig({ network }), {
         rpcUrl, contractAddress, methodName, params: parsedParams,
       }));
