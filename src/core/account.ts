@@ -8,6 +8,9 @@ import type {
 } from '../../lib/types.js';
 import { createHttpClient, HttpError } from '../../lib/http.js';
 import { callViewMethod } from '../../lib/aelf-client.js';
+import { SkillError } from './errors.js';
+
+const ACCOUNT_NOT_FOUND_ERROR_CODE = '3002';
 
 // ============================================================================
 // checkAccount
@@ -35,7 +38,7 @@ export async function checkAccount(
   config: PortkeyConfig,
   params: CheckAccountParams,
 ): Promise<CheckAccountResult> {
-  if (!params.email) throw new Error('email is required');
+  if (!params.email) throw new SkillError('INVALID_PARAMS', 'email is required');
 
   const http = createHttpClient(config);
 
@@ -55,10 +58,13 @@ export async function checkAccount(
   } catch (err: unknown) {
     // Account not found: prefer structured HttpError matching, fallback to message
     if (err instanceof HttpError) {
-      if (err.statusCode === 404 || err.errorCode === '3002') {
+      if (err.statusCode === 404 || err.errorCode === ACCOUNT_NOT_FOUND_ERROR_CODE) {
         return { isRegistered: false, originChainId: null };
       }
-    } else if (err instanceof Error && (err.message.includes('3002') || err.message.includes('not exist'))) {
+    } else if (
+      err instanceof Error &&
+      (err.message.includes(ACCOUNT_NOT_FOUND_ERROR_CODE) || err.message.includes('not exist'))
+    ) {
       // Legacy fallback for non-HttpError paths
       return { isRegistered: false, originChainId: null };
     }
