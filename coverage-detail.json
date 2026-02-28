@@ -3,9 +3,9 @@
   "coverageModel": "bun-text-all-files-by-file-average",
   "byFileAverage": {
     "lines": {
-      "total": 12,
-      "covered": 12,
-      "pct": 91.73435696462013
+      "total": 13,
+      "covered": 13,
+      "pct": 87.56698177750809
     },
     "functions": {
       "total": 0,
@@ -20,9 +20,9 @@
   },
   "weighted": {
     "lines": {
-      "total": 1123,
-      "covered": 947,
-      "pct": 84.32769367764915
+      "total": 1136,
+      "covered": 955,
+      "pct": 84.0669014084507
     },
     "functions": {
       "total": 0,
@@ -129,9 +129,9 @@
     {
       "file": "src/core/account.ts",
       "lines": {
-        "total": 90,
-        "covered": 89,
-        "pct": 98.88888888888889
+        "total": 95,
+        "covered": 94,
+        "pct": 98.94736842105263
       },
       "functions": {
         "total": 0,
@@ -186,6 +186,24 @@
         "total": 59,
         "covered": 59,
         "pct": 100
+      },
+      "functions": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      },
+      "branches": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      }
+    },
+    {
+      "file": "src/core/errors.ts",
+      "lines": {
+        "total": 8,
+        "covered": 3,
+        "pct": 37.5
       },
       "functions": {
         "total": 0,
