@@ -14,7 +14,15 @@ import { getVerifierServer, sendVerificationCode, verifyCode, registerWallet, re
 import { sameChainTransfer, crossChainTransfer, recoverStuckTransfer, getTransactionResult } from '../core/transfer.js';
 import { addGuardian, removeGuardian } from '../core/guardian.js';
 import { callContractViewMethod, managerForwardCallWithKey } from '../core/contract.js';
-import { saveKeystore, unlockWallet, lockWallet, getWalletStatus, getUnlockedWallet } from '../core/keystore.js';
+import {
+  saveKeystore,
+  unlockWallet,
+  lockWallet,
+  getWalletStatus,
+  getUnlockedWallet,
+  getActiveWallet,
+  setActiveWallet,
+} from '../core/keystore.js';
 import { SkillError } from '../core/errors.js';
 
 // ---------------------------------------------------------------------------
@@ -739,6 +747,59 @@ server.registerTool(
     try {
       return ok(getWalletStatus(network || 'mainnet'));
     } catch (err) { return fail(err); }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 29. portkey_get_active_wallet
+// ---------------------------------------------------------------------------
+server.registerTool(
+  'portkey_get_active_wallet',
+  {
+    description:
+      'Get shared active wallet context used by cross-skill signer resolution.',
+    inputSchema: {},
+  },
+  async () => {
+    try {
+      return ok({ activeWallet: getActiveWallet() });
+    } catch (err) {
+      return fail(err);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 30. portkey_set_active_wallet
+// ---------------------------------------------------------------------------
+server.registerTool(
+  'portkey_set_active_wallet',
+  {
+    description:
+      'Set shared active wallet context manually for cross-skill signer resolution.',
+    inputSchema: {
+      walletType: z.enum(['EOA', 'CA']).describe('Wallet identity type'),
+      source: z
+        .enum(['eoa-local', 'ca-keystore', 'env'])
+        .describe('Credential source'),
+      network: NETWORK.optional().describe('Optional network tag'),
+      address: z.string().optional().describe('EOA or manager address'),
+      caAddress: z.string().optional().describe('CA address'),
+      caHash: z.string().optional().describe('CA hash'),
+      walletFile: z.string().optional().describe('EOA wallet file absolute path'),
+      keystoreFile: z
+        .string()
+        .optional()
+        .describe('CA keystore file absolute path'),
+    },
+  },
+  async (input) => {
+    try {
+      const context = setActiveWallet(input);
+      return ok({ updated: true, context });
+    } catch (err) {
+      return fail(err);
+    }
   },
 );
 

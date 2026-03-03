@@ -70,6 +70,8 @@ ca-agent-skills/
 | 26 | Wallet | Unlock wallet | `portkey_unlock` | `unlock` | `unlockWallet` |
 | 27 | Wallet | Lock wallet | `portkey_lock` | `lock` | `lockWallet` |
 | 28 | Wallet | Wallet status | `portkey_wallet_status` | `wallet-status` | `getWalletStatus` |
+| 29 | Wallet | Get active wallet context | `portkey_get_active_wallet` | — | `getActiveWallet` |
+| 30 | Wallet | Set active wallet context | `portkey_set_active_wallet` | — | `setActiveWallet` |
 
 ## Wallet Persistence (Keystore)
 
@@ -118,6 +120,12 @@ bun run portkey_auth_skill.ts lock
 2. **Unlock** — decrypts the keystore, loads the wallet into memory for the current process
 3. **Lock** — clears the private key from memory
 4. **Write operations** — automatically use the unlocked wallet; falls back to `PORTKEY_PRIVATE_KEY` env var if no keystore is unlocked
+
+## Cross-skill signing
+
+- `portkey_save_keystore` and `portkey_unlock` automatically update shared active wallet context.
+- Other write-capable skills can resolve signer by `explicit -> active context -> env` (auto mode).
+- Shared context stores pointers only (no plaintext private key).
 
 ## Prerequisites
 
@@ -245,6 +253,8 @@ const balance = await getTokenBalance(config, {
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `PORTKEY_PRIVATE_KEY` | Fallback | — | Manager wallet private key (fallback if keystore not unlocked) |
+| `PORTKEY_CA_KEYSTORE_PASSWORD` | No | — | Optional password cache for active CA keystore in cross-skill signer resolution |
+| `PORTKEY_SKILL_WALLET_CONTEXT_PATH` | No | `~/.portkey/skill-wallet/context.v1.json` | Override shared wallet context path |
 | `PORTKEY_NETWORK` | No | `mainnet` | `mainnet` or `testnet` |
 | `PORTKEY_API_URL` | No | Per network | Override API endpoint |
 | `PORTKEY_GRAPHQL_URL` | No | Per network | Override GraphQL endpoint |

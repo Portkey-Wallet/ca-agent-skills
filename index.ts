@@ -134,6 +134,9 @@ export {
   getKeystorePath,
   clearKeystoreState,
   createSignerFromCaWallet,
+  resolveSignerContext,
+  getActiveWallet,
+  setActiveWallet,
 } from './src/core/keystore.js';
 
 // --- AelfSigner integration (for use with awaken/eforest DApp skills) ---
@@ -143,3 +146,19 @@ export {
   createSignerFromEnv,
   CaSigner,
 } from '@portkey/aelf-signer';
+
+export type {
+  SignerMode,
+  SignerProvider,
+  SignerContextInput,
+  WalletType,
+  WalletSource,
+  ActiveWalletProfile,
+  WalletContextFile,
+} from './lib/wallet-context.js';
+export {
+  readWalletContext,
+  writeWalletContext,
+  getActiveWalletProfile,
+  setActiveWalletProfile,
+} from './lib/wallet-context.js';
