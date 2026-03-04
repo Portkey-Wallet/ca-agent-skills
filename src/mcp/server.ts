@@ -2,6 +2,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import packageJson from '../../package.json';
 import { getConfig } from '../../lib/config.js';
 import { createWallet } from '../../lib/aelf-client.js';
 import { validateRpcUrl } from '../../lib/http.js';
@@ -33,7 +34,7 @@ import { SkillError } from '../core/errors.js';
 
 const server = new McpServer({
   name: 'ca-agent-skills',
-  version: '1.0.0',
+  version: packageJson.version,
 });
 
 // ---------------------------------------------------------------------------

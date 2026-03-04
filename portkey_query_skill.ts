@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { Command } from 'commander';
+import packageJson from './package.json';
 import { getConfig } from './lib/config.js';
 import { outputSuccess, outputError, safeJsonParse } from './cli-helpers.js';
 import { checkAccount, getGuardianList, getHolderInfo, getChainInfo } from './src/core/account.js';
@@ -10,7 +11,7 @@ import { validateRpcUrl } from './lib/http.js';
 import type { CaAddressInfo } from './lib/types.js';
 
 const program = new Command();
-program.name('portkey-query').version('1.0.0').description('Portkey wallet query tools')
+program.name('portkey-query').version(packageJson.version).description('Portkey wallet query tools')
   .option('--network <network>', 'mainnet or testnet', 'mainnet');
 
 // --- Account ---
