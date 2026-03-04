@@ -19,6 +19,10 @@ import {
   type SignerContextInput,
   type SignerProvider,
 } from '../../lib/wallet-context.js';
+import {
+  SIGNER_ERROR_CODES,
+  formatSignerError,
+} from '../../lib/signer-error-codes.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -360,16 +364,29 @@ export function createSignerFromCaWallet(): AelfSigner {
 function readKeystoreProfileSigner(input: SignerContextInput): AelfSigner {
   const profile = getActiveWalletProfile();
   if (!profile || profile.walletType !== 'CA' || profile.source !== 'ca-keystore') {
-    throw new Error('SIGNER_CONTEXT_NOT_FOUND: no active CA keystore profile');
+    throw new Error(
+      formatSignerError(
+        SIGNER_ERROR_CODES.CONTEXT_NOT_FOUND,
+        'no active CA keystore profile',
+      ),
+    );
   }
   const keystorePath = profile.keystoreFile || getKeystorePath(profile.network || 'mainnet');
   if (!fs.existsSync(keystorePath)) {
-    throw new Error(`SIGNER_CONTEXT_INVALID: keystore file not found: ${keystorePath}`);
+    throw new Error(
+      formatSignerError(
+        SIGNER_ERROR_CODES.CONTEXT_INVALID,
+        `keystore file not found: ${keystorePath}`,
+      ),
+    );
   }
   const password = input.password || process.env.PORTKEY_CA_KEYSTORE_PASSWORD;
   if (!password) {
     throw new Error(
-      'SIGNER_PASSWORD_REQUIRED: password is required for active CA keystore (set PORTKEY_CA_KEYSTORE_PASSWORD or pass password)',
+      formatSignerError(
+        SIGNER_ERROR_CODES.PASSWORD_REQUIRED,
+        'password is required for active CA keystore (set PORTKEY_CA_KEYSTORE_PASSWORD or pass password)',
+      ),
     );
   }
 
@@ -377,7 +394,12 @@ function readKeystoreProfileSigner(input: SignerContextInput): AelfSigner {
   const fileContent: CaKeystoreFile = JSON.parse(raw);
   const decrypted = unlockKeystore(fileContent.keystore, password);
   if (!decrypted?.privateKey) {
-    throw new Error('SIGNER_CONTEXT_INVALID: failed to decrypt active CA keystore');
+    throw new Error(
+      formatSignerError(
+        SIGNER_ERROR_CODES.CONTEXT_INVALID,
+        'failed to decrypt active CA keystore',
+      ),
+    );
   }
   return createCaSigner({
     managerPrivateKey: decrypted.privateKey,
@@ -397,7 +419,10 @@ export function resolveSignerContext(input: SignerContextInput = {}): {
 
   if (mode === 'daemon') {
     throw new Error(
-      'SIGNER_DAEMON_NOT_IMPLEMENTED: daemon provider is reserved for future release',
+      formatSignerError(
+        SIGNER_ERROR_CODES.DAEMON_NOT_IMPLEMENTED,
+        'daemon provider is reserved for future release',
+      ),
     );
   }
 
@@ -441,7 +466,12 @@ export function resolveSignerContext(input: SignerContextInput = {}): {
     throw contextError;
   }
 
-  throw new Error('SIGNER_CONTEXT_NOT_FOUND: no signer available from explicit/context/env');
+  throw new Error(
+    formatSignerError(
+      SIGNER_ERROR_CODES.CONTEXT_NOT_FOUND,
+      'no signer available from explicit/context/env',
+    ),
+  );
 }
 
 export function getActiveWallet(): ActiveWalletProfile | null {

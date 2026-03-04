@@ -7,6 +7,10 @@ import { createWallet, getWalletByPrivateKey } from '../../lib/aelf-client.js';
 import { validateRpcUrl } from '../../lib/http.js';
 import { LoginType, OperationType } from '../../lib/types.js';
 import { getActiveWalletProfile } from '../../lib/wallet-context.js';
+import {
+  SIGNER_ERROR_CODES,
+  formatSignerError,
+} from '../../lib/signer-error-codes.js';
 
 // Core functions
 import { checkAccount, getGuardianList, getHolderInfo, getChainInfo } from '../core/account.js';
@@ -152,7 +156,10 @@ function requireWallet(): ReturnType<typeof getWalletByPrivateKey> {
     const password = process.env.PORTKEY_CA_KEYSTORE_PASSWORD;
     if (!password) {
       throw new Error(
-        'SIGNER_PASSWORD_REQUIRED: active CA context found. Set PORTKEY_CA_KEYSTORE_PASSWORD or run portkey_unlock first.',
+        formatSignerError(
+          SIGNER_ERROR_CODES.PASSWORD_REQUIRED,
+          'active CA context found. Set PORTKEY_CA_KEYSTORE_PASSWORD or run portkey_unlock first.',
+        ),
       );
     }
     try {
@@ -162,13 +169,19 @@ function requireWallet(): ReturnType<typeof getWalletByPrivateKey> {
       if (nowUnlocked) return nowUnlocked.wallet;
     } catch (error) {
       throw new Error(
-        `SIGNER_CONTEXT_INVALID: failed to unlock active CA context (${error instanceof Error ? error.message : String(error)})`,
+        formatSignerError(
+          SIGNER_ERROR_CODES.CONTEXT_INVALID,
+          `failed to unlock active CA context (${error instanceof Error ? error.message : String(error)})`,
+        ),
       );
     }
   }
 
   throw new Error(
-    'SIGNER_CONTEXT_NOT_FOUND: wallet not available. Use portkey_unlock, or set PORTKEY_PRIVATE_KEY, or set active wallet + PORTKEY_CA_KEYSTORE_PASSWORD.',
+    formatSignerError(
+      SIGNER_ERROR_CODES.CONTEXT_NOT_FOUND,
+      'wallet not available. Use portkey_unlock, or set PORTKEY_PRIVATE_KEY, or set active wallet + PORTKEY_CA_KEYSTORE_PASSWORD.',
+    ),
   );
 }
 
