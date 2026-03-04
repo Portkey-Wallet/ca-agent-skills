@@ -189,4 +189,37 @@ describe('core/keystore', () => {
       keystore.resolveSignerContext({ signerMode: 'daemon' }),
     ).toThrow('SIGNER_DAEMON_NOT_IMPLEMENTED');
   });
+
+  test('resolveSignerContext auto mode falls back to env when context is missing', () => {
+    process.env.PORTKEY_PRIVATE_KEY = createWallet().privateKey;
+    process.env.PORTKEY_CA_HASH = 'env_hash_auto';
+    process.env.PORTKEY_CA_ADDRESS = 'ELF_env_auto_AELF';
+    const resolved = keystore.resolveSignerContext({ signerMode: 'auto' });
+    expect(resolved.provider).toBe('env');
+    delete process.env.PORTKEY_PRIVATE_KEY;
+    delete process.env.PORTKEY_CA_HASH;
+    delete process.env.PORTKEY_CA_ADDRESS;
+  });
+
+  test('resolveSignerContext auto mode returns context password error when env is unavailable', () => {
+    const wallet = createWallet();
+    keystore.saveKeystore({
+      password: 'secret',
+      privateKey: wallet.privateKey,
+      mnemonic: wallet.mnemonic,
+      caHash: 'hash_need_pwd',
+      caAddress: 'ELF_need_pwd_AELF',
+      originChainId: 'AELF',
+      network: 'mainnet',
+    });
+    keystore.lockWallet();
+    delete process.env.PORTKEY_PRIVATE_KEY;
+    delete process.env.PORTKEY_CA_HASH;
+    delete process.env.PORTKEY_CA_ADDRESS;
+    delete process.env.PORTKEY_CA_KEYSTORE_PASSWORD;
+
+    expect(() => keystore.resolveSignerContext({ signerMode: 'auto' })).toThrow(
+      'SIGNER_PASSWORD_REQUIRED',
+    );
+  });
 });

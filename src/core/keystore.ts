@@ -393,12 +393,12 @@ export function resolveSignerContext(input: SignerContextInput = {}): {
 } {
   const mode = input.signerMode || 'auto';
   const warnings: string[] = [];
+  let contextError: unknown = null;
 
   if (mode === 'daemon') {
-    if (input.signerMode === 'daemon') {
-      throw new Error('SIGNER_DAEMON_NOT_IMPLEMENTED: daemon provider is reserved for future release');
-    }
-    warnings.push('SIGNER_DAEMON_NOT_IMPLEMENTED');
+    throw new Error(
+      'SIGNER_DAEMON_NOT_IMPLEMENTED: daemon provider is reserved for future release',
+    );
   }
 
   if (mode === 'explicit' || mode === 'auto') {
@@ -420,6 +420,7 @@ export function resolveSignerContext(input: SignerContextInput = {}): {
       const signer = readKeystoreProfileSigner(input);
       return { signer, provider: 'context', warnings };
     } catch (error) {
+      contextError = error;
       if (mode === 'context') throw error;
     }
   }
@@ -434,6 +435,10 @@ export function resolveSignerContext(input: SignerContextInput = {}): {
     } catch (error) {
       if (mode === 'env') throw error;
     }
+  }
+
+  if (contextError) {
+    throw contextError;
   }
 
   throw new Error('SIGNER_CONTEXT_NOT_FOUND: no signer available from explicit/context/env');

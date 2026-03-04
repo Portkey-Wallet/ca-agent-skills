@@ -6,6 +6,7 @@ import { getConfig } from '../../lib/config.js';
 import { createWallet, getWalletByPrivateKey } from '../../lib/aelf-client.js';
 import { validateRpcUrl } from '../../lib/http.js';
 import { LoginType, OperationType } from '../../lib/types.js';
+import { getActiveWalletProfile } from '../../lib/wallet-context.js';
 
 // Core functions
 import { checkAccount, getGuardianList, getHolderInfo, getChainInfo } from '../core/account.js';
@@ -46,9 +47,46 @@ function ok(data: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
 }
 
+function toMcpError(err: unknown): {
+  code: string;
+  message: string;
+  details?: unknown;
+  traceId?: string;
+} {
+  const fallback = {
+    code: 'UNKNOWN_ERROR',
+    message: String(err),
+    details: undefined,
+    traceId: undefined,
+  };
+  if (!err || typeof err !== 'object') return fallback;
+
+  const record = err as Record<string, unknown>;
+  const rawMessage = typeof record.message === 'string' ? record.message : fallback.message;
+  let code = typeof record.code === 'string' ? record.code : '';
+  let message = rawMessage;
+  const prefixed = rawMessage.match(/^([A-Z0-9_]+):\s*(.*)$/);
+  if (!code && prefixed) {
+    code = prefixed[1];
+    message = prefixed[2] || prefixed[1];
+  }
+  return {
+    code: code || 'UNKNOWN_ERROR',
+    message,
+    details: record.details,
+    traceId: typeof record.traceId === 'string' ? record.traceId : undefined,
+  };
+}
+
 function fail(err: unknown) {
-  const message = err instanceof Error ? err.message : String(err);
-  return { content: [{ type: 'text' as const, text: `[ERROR] ${message}` }], isError: true as const };
+  const parsed = toMcpError(err);
+  return {
+    content: [
+      { type: 'text' as const, text: `[ERROR] ${parsed.code}: ${parsed.message}` },
+      { type: 'text' as const, text: JSON.stringify({ error: parsed }, null, 2) },
+    ],
+    isError: true as const,
+  };
 }
 
 /** Parse a JSON string and validate against a zod schema. */
@@ -105,11 +143,32 @@ const GuardianToRemoveSchema = z.object({
 function requireWallet(): ReturnType<typeof getWalletByPrivateKey> {
   const unlocked = getUnlockedWallet();
   if (unlocked) return unlocked.wallet;
+
   const pk = process.env.PORTKEY_PRIVATE_KEY;
   if (pk) return getWalletByPrivateKey(pk);
+
+  const active = getActiveWalletProfile();
+  if (active?.walletType === 'CA' && active.source === 'ca-keystore') {
+    const password = process.env.PORTKEY_CA_KEYSTORE_PASSWORD;
+    if (!password) {
+      throw new Error(
+        'SIGNER_PASSWORD_REQUIRED: active CA context found. Set PORTKEY_CA_KEYSTORE_PASSWORD or run portkey_unlock first.',
+      );
+    }
+    try {
+      const network = active.network || 'mainnet';
+      unlockWallet(password, network);
+      const nowUnlocked = getUnlockedWallet();
+      if (nowUnlocked) return nowUnlocked.wallet;
+    } catch (error) {
+      throw new Error(
+        `SIGNER_CONTEXT_INVALID: failed to unlock active CA context (${error instanceof Error ? error.message : String(error)})`,
+      );
+    }
+  }
+
   throw new Error(
-    'Wallet not available. Either use portkey_unlock to unlock your keystore, ' +
-    'or set the PORTKEY_PRIVATE_KEY environment variable.',
+    'SIGNER_CONTEXT_NOT_FOUND: wallet not available. Use portkey_unlock, or set PORTKEY_PRIVATE_KEY, or set active wallet + PORTKEY_CA_KEYSTORE_PASSWORD.',
   );
 }
 
