@@ -3,14 +3,12 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { getConfig } from '../../lib/config.js';
-import { createWallet, getWalletByPrivateKey } from '../../lib/aelf-client.js';
+import { createWallet } from '../../lib/aelf-client.js';
 import { validateRpcUrl } from '../../lib/http.js';
+import type { ApprovedGuardian, CaAddressInfo } from '../../lib/types.js';
 import { LoginType, OperationType } from '../../lib/types.js';
-import { getActiveWalletProfile } from '../../lib/wallet-context.js';
-import {
-  SIGNER_ERROR_CODES,
-  formatSignerError,
-} from '../../lib/signer-error-codes.js';
+import { fail } from './error.js';
+import { requireWallet } from './require-wallet.js';
 
 // Core functions
 import { checkAccount, getGuardianList, getHolderInfo, getChainInfo } from '../core/account.js';
@@ -24,7 +22,6 @@ import {
   unlockWallet,
   lockWallet,
   getWalletStatus,
-  getUnlockedWallet,
   getActiveWallet,
   setActiveWallet,
 } from '../core/keystore.js';
@@ -51,48 +48,6 @@ function ok(data: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
 }
 
-function toMcpError(err: unknown): {
-  code: string;
-  message: string;
-  details?: unknown;
-  traceId?: string;
-} {
-  const fallback = {
-    code: 'UNKNOWN_ERROR',
-    message: String(err),
-    details: undefined,
-    traceId: undefined,
-  };
-  if (!err || typeof err !== 'object') return fallback;
-
-  const record = err as Record<string, unknown>;
-  const rawMessage = typeof record.message === 'string' ? record.message : fallback.message;
-  let code = typeof record.code === 'string' ? record.code : '';
-  let message = rawMessage;
-  const prefixed = rawMessage.match(/^([A-Z0-9_]+):\s*(.*)$/);
-  if (!code && prefixed) {
-    code = prefixed[1];
-    message = prefixed[2] || prefixed[1];
-  }
-  return {
-    code: code || 'UNKNOWN_ERROR',
-    message,
-    details: record.details,
-    traceId: typeof record.traceId === 'string' ? record.traceId : undefined,
-  };
-}
-
-function fail(err: unknown) {
-  const parsed = toMcpError(err);
-  return {
-    content: [
-      { type: 'text' as const, text: `[ERROR] ${parsed.code}: ${parsed.message}` },
-      { type: 'text' as const, text: JSON.stringify({ error: parsed }, null, 2) },
-    ],
-    isError: true as const,
-  };
-}
-
 /** Parse a JSON string and validate against a zod schema. */
 function parseJson<T>(raw: string, schema: z.ZodType<T>, label: string): T {
   let parsed: unknown;
@@ -109,14 +64,14 @@ function parseJson<T>(raw: string, schema: z.ZodType<T>, label: string): T {
 // ---------------------------------------------------------------------------
 
 const CaAddressInfoSchema = z.array(z.object({
-  chainId: z.string(),
+  chainId: CHAIN_ID,
   caAddress: z.string(),
 }));
 
 const GuardianApprovedSchema = z.array(z.object({
   identifier: z.string().optional(),
   identifierHash: z.string().optional(),
-  type: z.union([z.string(), z.number()]).optional(),
+  type: z.union([z.string(), z.number()]).default(0),
   verifierId: z.string(),
   verificationDoc: z.string(),
   signature: z.string(),
@@ -139,51 +94,6 @@ const GuardianToRemoveSchema = z.object({
     id: z.string(),
   }),
 });
-
-// ---------------------------------------------------------------------------
-// Wallet accessor: unlocked keystore > env var fallback
-// ---------------------------------------------------------------------------
-
-function requireWallet(): ReturnType<typeof getWalletByPrivateKey> {
-  const unlocked = getUnlockedWallet();
-  if (unlocked) return unlocked.wallet;
-
-  const pk = process.env.PORTKEY_PRIVATE_KEY;
-  if (pk) return getWalletByPrivateKey(pk);
-
-  const active = getActiveWalletProfile();
-  if (active?.walletType === 'CA' && active.source === 'ca-keystore') {
-    const password = process.env.PORTKEY_CA_KEYSTORE_PASSWORD;
-    if (!password) {
-      throw new Error(
-        formatSignerError(
-          SIGNER_ERROR_CODES.PASSWORD_REQUIRED,
-          'active CA context found. Set PORTKEY_CA_KEYSTORE_PASSWORD or run portkey_unlock first.',
-        ),
-      );
-    }
-    try {
-      const network = active.network || 'mainnet';
-      unlockWallet(password, network);
-      const nowUnlocked = getUnlockedWallet();
-      if (nowUnlocked) return nowUnlocked.wallet;
-    } catch (error) {
-      throw new Error(
-        formatSignerError(
-          SIGNER_ERROR_CODES.CONTEXT_INVALID,
-          `failed to unlock active CA context (${error instanceof Error ? error.message : String(error)})`,
-        ),
-      );
-    }
-  }
-
-  throw new Error(
-    formatSignerError(
-      SIGNER_ERROR_CODES.CONTEXT_NOT_FOUND,
-      'wallet not available. Use portkey_unlock, or set PORTKEY_PRIVATE_KEY, or set active wallet + PORTKEY_CA_KEYSTORE_PASSWORD.',
-    ),
-  );
-}
 
 // ---------------------------------------------------------------------------
 // 1. portkey_check_account
@@ -386,7 +296,11 @@ server.registerTool(
   },
   async ({ email, manager, guardiansApproved, chainId, network }) => {
     try {
-      const parsed = parseJson(guardiansApproved, GuardianApprovedSchema, 'guardiansApproved');
+      const parsed = parseJson(
+        guardiansApproved,
+        GuardianApprovedSchema,
+        'guardiansApproved',
+      ) as ApprovedGuardian[];
       return ok(await recoverWallet(getConfig({ network }), {
         email, manager, guardiansApproved: parsed, chainId,
       }));
@@ -449,7 +363,7 @@ server.registerTool(
   },
   async ({ caAddressInfos, network }) => {
     try {
-      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos');
+      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos') as CaAddressInfo[];
       return ok(await getTokenList(getConfig({ network }), { caAddressInfos: parsed }));
     } catch (err) { return fail(err); }
   },
@@ -469,7 +383,7 @@ server.registerTool(
   },
   async ({ caAddressInfos, network }) => {
     try {
-      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos');
+      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos') as CaAddressInfo[];
       return ok(await getNftCollections(getConfig({ network }), { caAddressInfos: parsed }));
     } catch (err) { return fail(err); }
   },
@@ -490,7 +404,7 @@ server.registerTool(
   },
   async ({ caAddressInfos, symbol, network }) => {
     try {
-      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos');
+      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos') as CaAddressInfo[];
       return ok(await getNftItems(getConfig({ network }), { caAddressInfos: parsed, symbol }));
     } catch (err) { return fail(err); }
   },
@@ -639,7 +553,11 @@ server.registerTool(
       return ok(await addGuardian(getConfig({ network }), wallet, {
         caHash,
         guardianToAdd: parseJson(guardianToAdd, GuardianToAddSchema, 'guardianToAdd'),
-        guardiansApproved: parseJson(guardiansApproved, GuardianApprovedSchema, 'guardiansApproved'),
+        guardiansApproved: parseJson(
+          guardiansApproved,
+          GuardianApprovedSchema,
+          'guardiansApproved',
+        ) as ApprovedGuardian[],
         chainId,
       }));
     } catch (err) { return fail(err); }
@@ -667,7 +585,11 @@ server.registerTool(
       return ok(await removeGuardian(getConfig({ network }), wallet, {
         caHash,
         guardianToRemove: parseJson(guardianToRemove, GuardianToRemoveSchema, 'guardianToRemove'),
-        guardiansApproved: parseJson(guardiansApproved, GuardianApprovedSchema, 'guardiansApproved'),
+        guardiansApproved: parseJson(
+          guardiansApproved,
+          GuardianApprovedSchema,
+          'guardiansApproved',
+        ) as ApprovedGuardian[],
         chainId,
       }));
     } catch (err) { return fail(err); }

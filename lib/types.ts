@@ -192,11 +192,11 @@ export interface RecoverParams {
 
 export interface ApprovedGuardian {
   /** Guardian identifier (email, phone, social ID) */
-  identifier: string;
+  identifier?: string;
   /** Hash of the identifier */
-  identifierHash: string;
+  identifierHash?: string;
   /** Guardian type */
-  type: LoginType;
+  type: LoginType | number | string;
   /** Verifier service ID */
   verifierId: string;
   /** Verification document */
@@ -392,13 +392,13 @@ export interface GuardianVerificationInfo {
 
 export interface GuardianToAdd {
   identifierHash: string;
-  type: LoginType;
+  type: LoginType | number;
   verificationInfo: GuardianVerificationInfo;
 }
 
 export interface GuardianToRemove {
   identifierHash: string;
-  type: LoginType;
+  type: LoginType | number;
   verificationInfo: {
     id: string;
   };

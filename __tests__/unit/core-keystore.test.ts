@@ -70,7 +70,7 @@ describe('core/keystore', () => {
     const result = keystore.saveKeystore({
       password: 'secret',
       privateKey: wallet.privateKey,
-      mnemonic: wallet.mnemonic,
+      mnemonic: wallet.mnemonic!,
       caHash: 'hash',
       caAddress: 'ELF_ca_AELF',
       originChainId: 'AELF',
@@ -106,7 +106,7 @@ describe('core/keystore', () => {
     keystore.saveKeystore({
       password: 'secret',
       privateKey: wallet.privateKey,
-      mnemonic: wallet.mnemonic,
+      mnemonic: wallet.mnemonic!,
       caHash: 'hash2',
       caAddress: 'ELF_ca2_AELF',
       originChainId: 'AELF',
@@ -138,7 +138,7 @@ describe('core/keystore', () => {
     keystore.saveKeystore({
       password: 'secret',
       privateKey: wallet.privateKey,
-      mnemonic: wallet.mnemonic,
+      mnemonic: wallet.mnemonic!,
       caHash: 'hash3',
       caAddress: 'ELF_ca3_AELF',
       originChainId: 'AELF',
@@ -169,7 +169,7 @@ describe('core/keystore', () => {
     keystore.saveKeystore({
       password: 'secret',
       privateKey: wallet.privateKey,
-      mnemonic: wallet.mnemonic,
+      mnemonic: wallet.mnemonic!,
       caHash: 'hash_ctx',
       caAddress: 'ELF_ctx_AELF',
       originChainId: 'AELF',
@@ -206,7 +206,7 @@ describe('core/keystore', () => {
     keystore.saveKeystore({
       password: 'secret',
       privateKey: wallet.privateKey,
-      mnemonic: wallet.mnemonic,
+      mnemonic: wallet.mnemonic!,
       caHash: 'hash_need_pwd',
       caAddress: 'ELF_need_pwd_AELF',
       originChainId: 'AELF',
