@@ -35,6 +35,11 @@ declare module 'aelf-sdk' {
   }
 
   interface UtilsModule {
+    chainIdConvertor: {
+      base58ToChainId(chainId: string): number;
+      chainIdToBase58(chainId: number): string;
+    };
+    sha256(input: string): string;
     transform?: {
       transformMapToArray(type: any, params: any): any;
       transform(type: any, params: any, transformers: any): any;

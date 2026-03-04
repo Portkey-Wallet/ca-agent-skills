@@ -63,6 +63,8 @@ ca-agent-skills/
 | 26 | 钱包 | 解锁钱包 | `portkey_unlock` | `unlockWallet` |
 | 27 | 钱包 | 锁定钱包 | `portkey_lock` | `lockWallet` |
 | 28 | 钱包 | 钱包状态 | `portkey_wallet_status` | `getWalletStatus` |
+| 29 | 钱包 | 读取 active wallet context | `portkey_get_active_wallet` | `getActiveWallet` |
+| 30 | 钱包 | 设置 active wallet context | `portkey_set_active_wallet` | `setActiveWallet` |
 
 ## 钱包持久化（Keystore）
 
@@ -111,6 +113,12 @@ bun run portkey_auth_skill.ts lock
 2. **Unlock** — 解密 keystore，将钱包加载到进程内存
 3. **Lock** — 清除内存中的私钥
 4. **写操作** — 优先使用已解锁的钱包；如果没有解锁的 keystore，fallback 到 `PORTKEY_PRIVATE_KEY` 环境变量
+
+## 跨 Skill 签名共享
+
+- `portkey_save_keystore` 与 `portkey_unlock` 会自动更新共享 active wallet context。
+- 其它写能力 skill 可按 `explicit -> active context -> env` 顺序解析 signer（auto 模式）。
+- 共享 context 文件仅保存指针信息，不保存明文私钥。
 
 ## 前置条件
 
@@ -240,6 +248,8 @@ saveKeystore({
 | 变量 | 必需 | 默认值 | 说明 |
 |------|------|--------|------|
 | `PORTKEY_PRIVATE_KEY` | Fallback | — | Manager 钱包私钥（keystore 未解锁时的 fallback） |
+| `PORTKEY_CA_KEYSTORE_PASSWORD` | 否 | — | 跨 skill signer 解析时可选的 keystore 密码缓存 |
+| `PORTKEY_SKILL_WALLET_CONTEXT_PATH` | 否 | `~/.portkey/skill-wallet/context.v1.json` | 覆盖共享 wallet context 路径 |
 | `PORTKEY_NETWORK` | 否 | `mainnet` | `mainnet` 或 `testnet` |
 | `PORTKEY_API_URL` | 否 | 按网络 | 覆盖 API 地址 |
 | `PORTKEY_GRAPHQL_URL` | 否 | 按网络 | 覆盖 GraphQL 地址 |

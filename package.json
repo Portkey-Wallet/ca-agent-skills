@@ -1,6 +1,6 @@
 {
   "name": "@portkey/ca-agent-skills",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "description": "AI Agent toolkit for Portkey Wallet on the aelf blockchain — Email registration, login, transfers, guardian management, and more.",
   "type": "module",
   "main": "index.ts",
@@ -43,6 +43,9 @@
     "test:e2e": "bun test __tests__/e2e/",
     "coverage:gate": "bun run scripts/coverage-gate.ts",
     "test:coverage:ci": "COVERAGE_MIN_LINES=85 COVERAGE_MIN_FUNCS=80 bun run test:unit:coverage && bun run coverage:gate",
+    "typecheck:src": "bunx tsc -p tsconfig.src.json --noEmit",
+    "typecheck:test": "bunx tsc -p tsconfig.test.json --noEmit",
+    "typecheck": "bun run typecheck:src && bun run typecheck:test",
     "build:openclaw": "bun run bin/generate-openclaw.ts",
     "build:openclaw:check": "bun run bin/generate-openclaw.ts --check",
     "deps:check": "bun run scripts/check-deps-baseline.ts"
@@ -55,6 +58,9 @@
     "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/node": "latest",
+    "ajv": "^8.17.1",
+    "typescript": "^5.7.0"
   }
 }

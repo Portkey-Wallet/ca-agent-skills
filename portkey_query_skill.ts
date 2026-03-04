@@ -7,6 +7,7 @@ import { getTokenBalance, getTokenList, getNftCollections, getNftItems, getToken
 import { callContractViewMethod } from './src/core/contract.js';
 import { getTransactionResult } from './src/core/transfer.js';
 import { validateRpcUrl } from './lib/http.js';
+import type { CaAddressInfo } from './lib/types.js';
 
 const program = new Command();
 program.name('portkey-query').version('1.0.0').description('Portkey wallet query tools')
@@ -77,7 +78,9 @@ program.command('token-list')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
-      outputSuccess(await getTokenList(config, { caAddressInfos: safeJsonParse(opts.caAddressInfos, 'ca-address-infos') as any }));
+      outputSuccess(await getTokenList(config, {
+        caAddressInfos: safeJsonParse(opts.caAddressInfos, 'ca-address-infos') as CaAddressInfo[],
+      }));
     } catch (err: any) { outputError(err.message); }
   });
 
@@ -87,7 +90,9 @@ program.command('nft-collections')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
-      outputSuccess(await getNftCollections(config, { caAddressInfos: safeJsonParse(opts.caAddressInfos, 'ca-address-infos') as any }));
+      outputSuccess(await getNftCollections(config, {
+        caAddressInfos: safeJsonParse(opts.caAddressInfos, 'ca-address-infos') as CaAddressInfo[],
+      }));
     } catch (err: any) { outputError(err.message); }
   });
 
@@ -99,7 +104,8 @@ program.command('nft-items')
     try {
       const config = getConfig({ network: program.opts().network });
       outputSuccess(await getNftItems(config, {
-        caAddressInfos: safeJsonParse(opts.caAddressInfos, 'ca-address-infos') as any, symbol: opts.symbol,
+        caAddressInfos: safeJsonParse(opts.caAddressInfos, 'ca-address-infos') as CaAddressInfo[],
+        symbol: opts.symbol,
       }));
     } catch (err: any) { outputError(err.message); }
   });
@@ -128,7 +134,8 @@ program.command('view-call')
       const config = getConfig({ network: program.opts().network });
       outputSuccess(await callContractViewMethod(config, {
         rpcUrl: opts.rpcUrl, contractAddress: opts.contractAddress,
-        methodName: opts.methodName, params: opts.params ? safeJsonParse(opts.params, 'params') : undefined,
+        methodName: opts.methodName,
+        params: opts.params ? safeJsonParse(opts.params, 'params') as Record<string, unknown> : undefined,
       }));
     } catch (err: any) { outputError(err.message); }
   });

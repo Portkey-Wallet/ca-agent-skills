@@ -6,7 +6,8 @@ let clearCaches: typeof import('../../lib/aelf-client.js').clearCaches;
 
 beforeAll(async () => {
   // Load the real module instance even when other tests mock '../../lib/aelf-client.js'.
-  const real = await import('../../lib/aelf-client.js?real');
+  const realModulePath = '../../lib/aelf-client.js?real';
+  const real = await import(realModulePath);
   createWallet = real.createWallet;
   getWalletByPrivateKey = real.getWalletByPrivateKey;
   clearCaches = real.clearCaches;

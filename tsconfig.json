@@ -1,35 +1,3 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "esModuleInterop": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "outDir": "./dist",
-    "rootDir": ".",
-    "typeRoots": [
-      "./node_modules/@types",
-      "./lib"
-    ],
-    "noEmit": true
-  },
-  "include": [
-    "index.ts",
-    "src/**/*.ts",
-    "lib/**/*.ts",
-    "bin/**/*.ts",
-    "cli-helpers.ts",
-    "portkey_*_skill.ts",
-    "__tests__/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  "extends": "./tsconfig.src.json"
 }

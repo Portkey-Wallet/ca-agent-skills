@@ -7,6 +7,7 @@ import { sameChainTransfer, crossChainTransfer, recoverStuckTransfer } from './s
 import { addGuardian, removeGuardian } from './src/core/guardian.js';
 import { managerForwardCallWithKey } from './src/core/contract.js';
 import { getUnlockedWallet } from './src/core/keystore.js';
+import type { ApprovedGuardian, GuardianToAdd, GuardianToRemove } from './lib/types.js';
 
 const program = new Command();
 program.name('portkey-tx').version('1.0.0').description('Portkey wallet transaction & guardian tools')
@@ -96,8 +97,8 @@ program.command('add-guardian')
       const config = getConfig({ network: program.opts().network });
       outputSuccess(await addGuardian(config, wallet, {
         caHash: opts.caHash,
-        guardianToAdd: safeJsonParse(opts.guardianToAdd, 'guardian-to-add'),
-        guardiansApproved: safeJsonParse(opts.guardiansApproved, 'guardians-approved') as any,
+        guardianToAdd: safeJsonParse(opts.guardianToAdd, 'guardian-to-add') as GuardianToAdd,
+        guardiansApproved: safeJsonParse(opts.guardiansApproved, 'guardians-approved') as ApprovedGuardian[],
         chainId: opts.chainId,
       }));
     } catch (err: any) { outputError(err.message); }
@@ -115,8 +116,8 @@ program.command('remove-guardian')
       const config = getConfig({ network: program.opts().network });
       outputSuccess(await removeGuardian(config, wallet, {
         caHash: opts.caHash,
-        guardianToRemove: safeJsonParse(opts.guardianToRemove, 'guardian-to-remove'),
-        guardiansApproved: safeJsonParse(opts.guardiansApproved, 'guardians-approved') as any,
+        guardianToRemove: safeJsonParse(opts.guardianToRemove, 'guardian-to-remove') as GuardianToRemove,
+        guardiansApproved: safeJsonParse(opts.guardiansApproved, 'guardians-approved') as ApprovedGuardian[],
         chainId: opts.chainId,
       }));
     } catch (err: any) { outputError(err.message); }
@@ -135,7 +136,9 @@ program.command('forward-call')
       const config = getConfig({ network: program.opts().network });
       outputSuccess(await managerForwardCallWithKey(config, wallet.privateKey, {
         caHash: opts.caHash, contractAddress: opts.contractAddress,
-        methodName: opts.methodName, args: safeJsonParse(opts.args, 'args'), chainId: opts.chainId,
+        methodName: opts.methodName,
+        args: safeJsonParse(opts.args, 'args') as Record<string, unknown>,
+        chainId: opts.chainId,
       }));
     } catch (err: any) { outputError(err.message); }
   });

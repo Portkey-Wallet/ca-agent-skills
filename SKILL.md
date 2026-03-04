@@ -12,6 +12,7 @@ description: "Portkey CA wallet registration/auth/guardian/transfer operations f
 - Auth operations: verifier, email code, register, recover, status
 - Query operations: account, guardian, assets, chain config
 - Tx operations: transfer, contract call, approvals, keystore workflows
+- Shared wallet context: auto-set active CA profile for cross-skill signer resolution
 - Supports SDK, CLI, MCP, and OpenClaw integration from one codebase.
 
 ## Safe usage rules
@@ -22,6 +23,8 @@ description: "Portkey CA wallet registration/auth/guardian/transfer operations f
 ## Command recipes
 - Start MCP server: `bun run mcp`
 - Run CLI entry: `bun run portkey_query_skill.ts chain-info`
+- Read active wallet context: `portkey_get_active_wallet`
+- Set active wallet context: `portkey_set_active_wallet`
 - Generate OpenClaw config: `bun run build:openclaw`
 - Verify OpenClaw config: `bun run build:openclaw:check`
 - Run CI coverage gate: `bun run test:coverage:ci`

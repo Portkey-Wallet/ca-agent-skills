@@ -5,8 +5,15 @@ import * as path from 'path';
 import { createWallet } from '../../lib/aelf-client';
 
 const originalHome = process.env.HOME;
+const originalContextPath = process.env.PORTKEY_SKILL_WALLET_CONTEXT_PATH;
 const testHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ca-keystore-home-'));
 process.env.HOME = testHome;
+process.env.PORTKEY_SKILL_WALLET_CONTEXT_PATH = path.join(
+  testHome,
+  '.portkey',
+  'skill-wallet',
+  'context.v1.json',
+);
 
 let keystore: typeof import('../../src/core/keystore.js');
 
@@ -27,6 +34,11 @@ afterAll(() => {
     process.env.HOME = originalHome;
   } else {
     delete process.env.HOME;
+  }
+  if (originalContextPath !== undefined) {
+    process.env.PORTKEY_SKILL_WALLET_CONTEXT_PATH = originalContextPath;
+  } else {
+    delete process.env.PORTKEY_SKILL_WALLET_CONTEXT_PATH;
   }
   fs.rmSync(testHome, { recursive: true, force: true });
 });
@@ -58,7 +70,7 @@ describe('core/keystore', () => {
     const result = keystore.saveKeystore({
       password: 'secret',
       privateKey: wallet.privateKey,
-      mnemonic: wallet.mnemonic,
+      mnemonic: wallet.mnemonic!,
       caHash: 'hash',
       caAddress: 'ELF_ca_AELF',
       originChainId: 'AELF',
@@ -73,6 +85,12 @@ describe('core/keystore', () => {
     expect(status.unlocked).toBe(true);
     expect(status.caHash).toBe('hash');
     expect(status.caAddress).toBe('ELF_ca_AELF');
+
+    const active = keystore.getActiveWallet();
+    expect(active?.walletType).toBe('CA');
+    expect(active?.source).toBe('ca-keystore');
+    expect(active?.caHash).toBe('hash');
+    expect(active?.caAddress).toBe('ELF_ca_AELF');
   });
 
   test('unlockWallet throws when file does not exist', () => {
@@ -88,7 +106,7 @@ describe('core/keystore', () => {
     keystore.saveKeystore({
       password: 'secret',
       privateKey: wallet.privateKey,
-      mnemonic: wallet.mnemonic,
+      mnemonic: wallet.mnemonic!,
       caHash: 'hash2',
       caAddress: 'ELF_ca2_AELF',
       originChainId: 'AELF',
@@ -120,7 +138,7 @@ describe('core/keystore', () => {
     keystore.saveKeystore({
       password: 'secret',
       privateKey: wallet.privateKey,
-      mnemonic: wallet.mnemonic,
+      mnemonic: wallet.mnemonic!,
       caHash: 'hash3',
       caAddress: 'ELF_ca3_AELF',
       originChainId: 'AELF',
@@ -144,5 +162,64 @@ describe('core/keystore', () => {
     expect(status.exists).toBe(true);
     expect(status.caAddress).toBeNull();
     expect(status.caHash).toBeNull();
+  });
+
+  test('resolveSignerContext reads active CA keystore with password env', () => {
+    const wallet = createWallet();
+    keystore.saveKeystore({
+      password: 'secret',
+      privateKey: wallet.privateKey,
+      mnemonic: wallet.mnemonic!,
+      caHash: 'hash_ctx',
+      caAddress: 'ELF_ctx_AELF',
+      originChainId: 'AELF',
+      network: 'mainnet',
+    });
+    keystore.lockWallet();
+
+    process.env.PORTKEY_CA_KEYSTORE_PASSWORD = 'secret';
+    const resolved = keystore.resolveSignerContext({ signerMode: 'context' });
+    expect(resolved.provider).toBe('context');
+    expect(resolved.signer.address).toBe('ELF_ctx_AELF');
+    delete process.env.PORTKEY_CA_KEYSTORE_PASSWORD;
+  });
+
+  test('resolveSignerContext daemon mode returns not implemented', () => {
+    expect(() =>
+      keystore.resolveSignerContext({ signerMode: 'daemon' }),
+    ).toThrow('SIGNER_DAEMON_NOT_IMPLEMENTED');
+  });
+
+  test('resolveSignerContext auto mode falls back to env when context is missing', () => {
+    process.env.PORTKEY_PRIVATE_KEY = createWallet().privateKey;
+    process.env.PORTKEY_CA_HASH = 'env_hash_auto';
+    process.env.PORTKEY_CA_ADDRESS = 'ELF_env_auto_AELF';
+    const resolved = keystore.resolveSignerContext({ signerMode: 'auto' });
+    expect(resolved.provider).toBe('env');
+    delete process.env.PORTKEY_PRIVATE_KEY;
+    delete process.env.PORTKEY_CA_HASH;
+    delete process.env.PORTKEY_CA_ADDRESS;
+  });
+
+  test('resolveSignerContext auto mode returns context password error when env is unavailable', () => {
+    const wallet = createWallet();
+    keystore.saveKeystore({
+      password: 'secret',
+      privateKey: wallet.privateKey,
+      mnemonic: wallet.mnemonic!,
+      caHash: 'hash_need_pwd',
+      caAddress: 'ELF_need_pwd_AELF',
+      originChainId: 'AELF',
+      network: 'mainnet',
+    });
+    keystore.lockWallet();
+    delete process.env.PORTKEY_PRIVATE_KEY;
+    delete process.env.PORTKEY_CA_HASH;
+    delete process.env.PORTKEY_CA_ADDRESS;
+    delete process.env.PORTKEY_CA_KEYSTORE_PASSWORD;
+
+    expect(() => keystore.resolveSignerContext({ signerMode: 'auto' })).toThrow(
+      'SIGNER_PASSWORD_REQUIRED',
+    );
   });
 });

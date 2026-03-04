@@ -3,9 +3,12 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { getConfig } from '../../lib/config.js';
-import { createWallet, getWalletByPrivateKey } from '../../lib/aelf-client.js';
+import { createWallet } from '../../lib/aelf-client.js';
 import { validateRpcUrl } from '../../lib/http.js';
+import type { ApprovedGuardian, CaAddressInfo } from '../../lib/types.js';
 import { LoginType, OperationType } from '../../lib/types.js';
+import { fail } from './error.js';
+import { requireWallet } from './require-wallet.js';
 
 // Core functions
 import { checkAccount, getGuardianList, getHolderInfo, getChainInfo } from '../core/account.js';
@@ -14,7 +17,14 @@ import { getVerifierServer, sendVerificationCode, verifyCode, registerWallet, re
 import { sameChainTransfer, crossChainTransfer, recoverStuckTransfer, getTransactionResult } from '../core/transfer.js';
 import { addGuardian, removeGuardian } from '../core/guardian.js';
 import { callContractViewMethod, managerForwardCallWithKey } from '../core/contract.js';
-import { saveKeystore, unlockWallet, lockWallet, getWalletStatus, getUnlockedWallet } from '../core/keystore.js';
+import {
+  saveKeystore,
+  unlockWallet,
+  lockWallet,
+  getWalletStatus,
+  getActiveWallet,
+  setActiveWallet,
+} from '../core/keystore.js';
 import { SkillError } from '../core/errors.js';
 
 // ---------------------------------------------------------------------------
@@ -38,11 +48,6 @@ function ok(data: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
 }
 
-function fail(err: unknown) {
-  const message = err instanceof Error ? err.message : String(err);
-  return { content: [{ type: 'text' as const, text: `[ERROR] ${message}` }], isError: true as const };
-}
-
 /** Parse a JSON string and validate against a zod schema. */
 function parseJson<T>(raw: string, schema: z.ZodType<T>, label: string): T {
   let parsed: unknown;
@@ -59,14 +64,14 @@ function parseJson<T>(raw: string, schema: z.ZodType<T>, label: string): T {
 // ---------------------------------------------------------------------------
 
 const CaAddressInfoSchema = z.array(z.object({
-  chainId: z.string(),
+  chainId: CHAIN_ID,
   caAddress: z.string(),
 }));
 
 const GuardianApprovedSchema = z.array(z.object({
   identifier: z.string().optional(),
   identifierHash: z.string().optional(),
-  type: z.union([z.string(), z.number()]).optional(),
+  type: z.union([z.string(), z.number()]).default(0),
   verifierId: z.string(),
   verificationDoc: z.string(),
   signature: z.string(),
@@ -89,21 +94,6 @@ const GuardianToRemoveSchema = z.object({
     id: z.string(),
   }),
 });
-
-// ---------------------------------------------------------------------------
-// Wallet accessor: unlocked keystore > env var fallback
-// ---------------------------------------------------------------------------
-
-function requireWallet(): ReturnType<typeof getWalletByPrivateKey> {
-  const unlocked = getUnlockedWallet();
-  if (unlocked) return unlocked.wallet;
-  const pk = process.env.PORTKEY_PRIVATE_KEY;
-  if (pk) return getWalletByPrivateKey(pk);
-  throw new Error(
-    'Wallet not available. Either use portkey_unlock to unlock your keystore, ' +
-    'or set the PORTKEY_PRIVATE_KEY environment variable.',
-  );
-}
 
 // ---------------------------------------------------------------------------
 // 1. portkey_check_account
@@ -306,7 +296,11 @@ server.registerTool(
   },
   async ({ email, manager, guardiansApproved, chainId, network }) => {
     try {
-      const parsed = parseJson(guardiansApproved, GuardianApprovedSchema, 'guardiansApproved');
+      const parsed = parseJson(
+        guardiansApproved,
+        GuardianApprovedSchema,
+        'guardiansApproved',
+      ) as ApprovedGuardian[];
       return ok(await recoverWallet(getConfig({ network }), {
         email, manager, guardiansApproved: parsed, chainId,
       }));
@@ -369,7 +363,7 @@ server.registerTool(
   },
   async ({ caAddressInfos, network }) => {
     try {
-      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos');
+      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos') as CaAddressInfo[];
       return ok(await getTokenList(getConfig({ network }), { caAddressInfos: parsed }));
     } catch (err) { return fail(err); }
   },
@@ -389,7 +383,7 @@ server.registerTool(
   },
   async ({ caAddressInfos, network }) => {
     try {
-      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos');
+      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos') as CaAddressInfo[];
       return ok(await getNftCollections(getConfig({ network }), { caAddressInfos: parsed }));
     } catch (err) { return fail(err); }
   },
@@ -410,7 +404,7 @@ server.registerTool(
   },
   async ({ caAddressInfos, symbol, network }) => {
     try {
-      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos');
+      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos') as CaAddressInfo[];
       return ok(await getNftItems(getConfig({ network }), { caAddressInfos: parsed, symbol }));
     } catch (err) { return fail(err); }
   },
@@ -559,7 +553,11 @@ server.registerTool(
       return ok(await addGuardian(getConfig({ network }), wallet, {
         caHash,
         guardianToAdd: parseJson(guardianToAdd, GuardianToAddSchema, 'guardianToAdd'),
-        guardiansApproved: parseJson(guardiansApproved, GuardianApprovedSchema, 'guardiansApproved'),
+        guardiansApproved: parseJson(
+          guardiansApproved,
+          GuardianApprovedSchema,
+          'guardiansApproved',
+        ) as ApprovedGuardian[],
         chainId,
       }));
     } catch (err) { return fail(err); }
@@ -587,7 +585,11 @@ server.registerTool(
       return ok(await removeGuardian(getConfig({ network }), wallet, {
         caHash,
         guardianToRemove: parseJson(guardianToRemove, GuardianToRemoveSchema, 'guardianToRemove'),
-        guardiansApproved: parseJson(guardiansApproved, GuardianApprovedSchema, 'guardiansApproved'),
+        guardiansApproved: parseJson(
+          guardiansApproved,
+          GuardianApprovedSchema,
+          'guardiansApproved',
+        ) as ApprovedGuardian[],
         chainId,
       }));
     } catch (err) { return fail(err); }
@@ -739,6 +741,59 @@ server.registerTool(
     try {
       return ok(getWalletStatus(network || 'mainnet'));
     } catch (err) { return fail(err); }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 29. portkey_get_active_wallet
+// ---------------------------------------------------------------------------
+server.registerTool(
+  'portkey_get_active_wallet',
+  {
+    description:
+      'Get shared active wallet context used by cross-skill signer resolution.',
+    inputSchema: {},
+  },
+  async () => {
+    try {
+      return ok({ activeWallet: getActiveWallet() });
+    } catch (err) {
+      return fail(err);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 30. portkey_set_active_wallet
+// ---------------------------------------------------------------------------
+server.registerTool(
+  'portkey_set_active_wallet',
+  {
+    description:
+      'Set shared active wallet context manually for cross-skill signer resolution.',
+    inputSchema: {
+      walletType: z.enum(['EOA', 'CA']).describe('Wallet identity type'),
+      source: z
+        .enum(['eoa-local', 'ca-keystore', 'env'])
+        .describe('Credential source'),
+      network: NETWORK.optional().describe('Optional network tag'),
+      address: z.string().optional().describe('EOA or manager address'),
+      caAddress: z.string().optional().describe('CA address'),
+      caHash: z.string().optional().describe('CA hash'),
+      walletFile: z.string().optional().describe('EOA wallet file absolute path'),
+      keystoreFile: z
+        .string()
+        .optional()
+        .describe('CA keystore file absolute path'),
+    },
+  },
+  async (input) => {
+    try {
+      const context = setActiveWallet(input);
+      return ok({ updated: true, context });
+    } catch (err) {
+      return fail(err);
+    }
   },
 );
 

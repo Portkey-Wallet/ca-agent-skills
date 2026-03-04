@@ -12,6 +12,17 @@ import * as os from 'os';
 import { getKeystore, unlockKeystore } from 'aelf-sdk/src/util/keyStore.js';
 import { getWalletByPrivateKey, type AElfWallet } from '../../lib/aelf-client.js';
 import type { ChainId } from '../../lib/types.js';
+import {
+  getActiveWalletProfile,
+  setActiveWalletProfile,
+  type ActiveWalletProfile,
+  type SignerContextInput,
+  type SignerProvider,
+} from '../../lib/wallet-context.js';
+import {
+  SIGNER_ERROR_CODES,
+  formatSignerError,
+} from '../../lib/signer-error-codes.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -160,6 +171,22 @@ export function saveKeystore(params: SaveKeystoreParams): {
     network,
   };
 
+  setActiveWalletProfile(
+    {
+      walletType: 'CA',
+      source: 'ca-keystore',
+      network,
+      caHash,
+      caAddress,
+      address: wallet.address,
+      keystoreFile: filePath,
+    },
+    {
+      skill: 'portkey-ca',
+      version: process.env.npm_package_version || '0.0.0',
+    },
+  );
+
   return {
     message: `Keystore saved and wallet unlocked. Path: ${filePath}`,
     keystorePath: filePath,
@@ -216,6 +243,22 @@ export function unlockWallet(
     originChainId: fileContent.originChainId,
     network,
   };
+
+  setActiveWalletProfile(
+    {
+      walletType: 'CA',
+      source: 'ca-keystore',
+      network,
+      caHash: fileContent.caHash,
+      caAddress: fileContent.caAddress,
+      address: wallet.address,
+      keystoreFile: filePath,
+    },
+    {
+      skill: 'portkey-ca',
+      version: process.env.npm_package_version || '0.0.0',
+    },
+  );
 
   return {
     message: 'Wallet unlocked successfully.',
@@ -316,4 +359,137 @@ export function createSignerFromCaWallet(): AelfSigner {
   }
   // Fallback to env-based detection
   return createSignerFromEnv();
+}
+
+function readKeystoreProfileSigner(input: SignerContextInput): AelfSigner {
+  const profile = getActiveWalletProfile();
+  if (!profile || profile.walletType !== 'CA' || profile.source !== 'ca-keystore') {
+    throw new Error(
+      formatSignerError(
+        SIGNER_ERROR_CODES.CONTEXT_NOT_FOUND,
+        'no active CA keystore profile',
+      ),
+    );
+  }
+  const keystorePath = profile.keystoreFile || getKeystorePath(profile.network || 'mainnet');
+  if (!fs.existsSync(keystorePath)) {
+    throw new Error(
+      formatSignerError(
+        SIGNER_ERROR_CODES.CONTEXT_INVALID,
+        `keystore file not found: ${keystorePath}`,
+      ),
+    );
+  }
+  const password = input.password || process.env.PORTKEY_CA_KEYSTORE_PASSWORD;
+  if (!password) {
+    throw new Error(
+      formatSignerError(
+        SIGNER_ERROR_CODES.PASSWORD_REQUIRED,
+        'password is required for active CA keystore (set PORTKEY_CA_KEYSTORE_PASSWORD or pass password)',
+      ),
+    );
+  }
+
+  const raw = fs.readFileSync(keystorePath, 'utf-8');
+  const fileContent: CaKeystoreFile = JSON.parse(raw);
+  const decrypted = unlockKeystore(fileContent.keystore, password);
+  if (!decrypted?.privateKey) {
+    throw new Error(
+      formatSignerError(
+        SIGNER_ERROR_CODES.CONTEXT_INVALID,
+        'failed to decrypt active CA keystore',
+      ),
+    );
+  }
+  return createCaSigner({
+    managerPrivateKey: decrypted.privateKey,
+    caHash: fileContent.caHash || profile.caHash || '',
+    caAddress: fileContent.caAddress || profile.caAddress || '',
+  });
+}
+
+export function resolveSignerContext(input: SignerContextInput = {}): {
+  signer: AelfSigner;
+  provider: SignerProvider;
+  warnings: string[];
+} {
+  const mode = input.signerMode || 'auto';
+  const warnings: string[] = [];
+  let contextError: unknown = null;
+
+  if (mode === 'daemon') {
+    throw new Error(
+      formatSignerError(
+        SIGNER_ERROR_CODES.DAEMON_NOT_IMPLEMENTED,
+        'daemon provider is reserved for future release',
+      ),
+    );
+  }
+
+  if (mode === 'explicit' || mode === 'auto') {
+    if (input.privateKey && input.walletType === 'CA' && input.caHash && input.caAddress) {
+      return {
+        signer: createCaSigner({
+          managerPrivateKey: input.privateKey,
+          caHash: input.caHash,
+          caAddress: input.caAddress,
+        }),
+        provider: 'explicit',
+        warnings,
+      };
+    }
+  }
+
+  if (mode === 'context' || mode === 'auto') {
+    try {
+      const signer = readKeystoreProfileSigner(input);
+      return { signer, provider: 'context', warnings };
+    } catch (error) {
+      contextError = error;
+      if (mode === 'context') throw error;
+    }
+  }
+
+  if (mode === 'env' || mode === 'auto') {
+    try {
+      return {
+        signer: createSignerFromEnv(),
+        provider: 'env',
+        warnings,
+      };
+    } catch (error) {
+      if (mode === 'env') throw error;
+    }
+  }
+
+  if (contextError) {
+    throw contextError;
+  }
+
+  throw new Error(
+    formatSignerError(
+      SIGNER_ERROR_CODES.CONTEXT_NOT_FOUND,
+      'no signer available from explicit/context/env',
+    ),
+  );
+}
+
+export function getActiveWallet(): ActiveWalletProfile | null {
+  return getActiveWalletProfile();
+}
+
+export function setActiveWallet(input: {
+  walletType: 'EOA' | 'CA';
+  source: 'eoa-local' | 'ca-keystore' | 'env';
+  network?: string;
+  address?: string;
+  caAddress?: string;
+  caHash?: string;
+  walletFile?: string;
+  keystoreFile?: string;
+}) {
+  return setActiveWalletProfile(input, {
+    skill: 'portkey-ca',
+    version: process.env.npm_package_version || '0.0.0',
+  });
 }

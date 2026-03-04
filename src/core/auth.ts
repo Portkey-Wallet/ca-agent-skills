@@ -221,7 +221,9 @@ export async function recoverWallet(
         extraData: params.extraData || String(Date.now()),
         chainId: params.chainId,
         guardiansApproved: params.guardiansApproved.map((g) => ({
-          type: LoginTypeLabel[g.type],
+          type: LoginTypeLabel[
+            (typeof g.type === 'number' ? g.type : Number(g.type)) as LoginType
+          ],
           identifier: g.identifier,
           // NOTE: do NOT send identifierHash — the backend computes it from identifier + salt
           verifierId: g.verifierId,
