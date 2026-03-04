@@ -2,6 +2,7 @@
 import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
+import packageJson from '../package.json';
 import { setupClaude } from './platforms/claude.js';
 import { setupCursor } from './platforms/cursor.js';
 import { setupOpenClaw } from './platforms/openclaw.js';
@@ -16,7 +17,7 @@ import {
 const program = new Command();
 program
   .name('portkey-setup')
-  .version('1.0.0')
+  .version(packageJson.version)
   .description('Configure Portkey Agent Skills for AI platforms');
 
 // ---------------------------------------------------------------------------

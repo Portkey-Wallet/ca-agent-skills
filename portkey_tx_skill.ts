@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { Command } from 'commander';
+import packageJson from './package.json';
 import { getConfig } from './lib/config.js';
 import { outputSuccess, outputError, safeJsonParse } from './cli-helpers.js';
 import { getWalletByPrivateKey, type AElfWallet } from './lib/aelf-client.js';
@@ -10,7 +11,7 @@ import { getUnlockedWallet } from './src/core/keystore.js';
 import type { ApprovedGuardian, GuardianToAdd, GuardianToRemove } from './lib/types.js';
 
 const program = new Command();
-program.name('portkey-tx').version('1.0.0').description('Portkey wallet transaction & guardian tools')
+program.name('portkey-tx').version(packageJson.version).description('Portkey wallet transaction & guardian tools')
   .option('--network <network>', 'mainnet or testnet', 'mainnet');
 
 function requireWallet(): AElfWallet {

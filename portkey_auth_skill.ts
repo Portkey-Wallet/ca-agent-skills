@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { Command } from 'commander';
+import packageJson from './package.json';
 import { getConfig } from './lib/config.js';
 import { outputSuccess, outputError, safeJsonParse } from './cli-helpers.js';
 import { createWallet } from './lib/aelf-client.js';
@@ -15,7 +16,7 @@ import {
 import { OperationType } from './lib/types.js';
 
 const program = new Command();
-program.name('portkey-auth').version('1.0.0').description('Portkey wallet registration & login tools')
+program.name('portkey-auth').version(packageJson.version).description('Portkey wallet registration & login tools')
   .option('--network <network>', 'mainnet or testnet', 'mainnet');
 
 program.command('get-verifier')
