@@ -19,12 +19,22 @@ beforeEach(() => {
   account.clearChainInfoCache();
 });
 
+const TEST_CONFIG = {
+  apiUrl: 'https://api',
+  eoaApiUrl: 'https://eoa-api',
+  graphqlUrl: 'https://gql',
+  network: 'mainnet' as const,
+  eoaFallbackEnabled: true,
+  eoaFallbackRetryCount: 2,
+  eoaFallbackRetryDelayMs: 200,
+};
+
 describe('core/account', () => {
   test('checkAccount returns registered when originChainId exists', async () => {
     coreMockState.httpGetImpl = async () => ({ originChainId: 'AELF' });
 
     const result = await account.checkAccount(
-      { apiUrl: 'https://api', graphqlUrl: 'https://gql', network: 'mainnet' },
+      TEST_CONFIG,
       { email: 'a@b.com' },
     );
 
@@ -36,7 +46,7 @@ describe('core/account', () => {
     coreMockState.httpGetImpl = async () => ({ originChainId: null });
 
     const result = await account.checkAccount(
-      { apiUrl: 'https://api', graphqlUrl: 'https://gql', network: 'mainnet' },
+      TEST_CONFIG,
       { email: 'a@b.com' },
     );
 
@@ -49,7 +59,7 @@ describe('core/account', () => {
     };
 
     const result = await account.checkAccount(
-      { apiUrl: 'https://api', graphqlUrl: 'https://gql', network: 'mainnet' },
+      TEST_CONFIG,
       { email: 'x@y.com' },
     );
 
@@ -62,7 +72,7 @@ describe('core/account', () => {
     };
 
     const result = await account.checkAccount(
-      { apiUrl: 'https://api', graphqlUrl: 'https://gql', network: 'mainnet' },
+      TEST_CONFIG,
       { email: 'x@y.com' },
     );
 
@@ -76,7 +86,7 @@ describe('core/account', () => {
 
     await expect(
       account.checkAccount(
-        { apiUrl: 'https://api', graphqlUrl: 'https://gql', network: 'mainnet' },
+        TEST_CONFIG,
         { email: 'x@y.com' },
       ),
     ).rejects.toThrow('boom');
@@ -91,7 +101,7 @@ describe('core/account', () => {
     });
 
     const result = await account.getGuardianList(
-      { apiUrl: 'https://api', graphqlUrl: 'https://gql', network: 'mainnet' },
+      TEST_CONFIG,
       { identifier: 'a@b.com' },
     );
 
@@ -106,7 +116,7 @@ describe('core/account', () => {
     });
 
     const result = await account.getGuardianList(
-      { apiUrl: 'https://api', graphqlUrl: 'https://gql', network: 'mainnet' },
+      TEST_CONFIG,
       { identifier: 'legacy@b.com', chainId: 'AELF' },
     );
 
@@ -132,18 +142,12 @@ describe('core/account', () => {
       return {};
     };
 
-    const config = {
-      apiUrl: 'https://api',
-      graphqlUrl: 'https://gql',
-      network: 'mainnet' as const,
-    };
-
-    await account.getChainInfo(config);
-    await account.getChainInfo(config);
+    await account.getChainInfo(TEST_CONFIG);
+    await account.getChainInfo(TEST_CONFIG);
     expect(times).toBe(1);
 
     account.clearChainInfoCache();
-    await account.getChainInfo(config);
+    await account.getChainInfo(TEST_CONFIG);
     expect(times).toBe(2);
   });
 
@@ -161,7 +165,7 @@ describe('core/account', () => {
 
     await expect(
       account.getChainInfoByChainId(
-        { apiUrl: 'https://api', graphqlUrl: 'https://gql', network: 'mainnet' },
+        TEST_CONFIG,
         'tDVV',
       ),
     ).rejects.toThrow('not found');
@@ -193,7 +197,7 @@ describe('core/account', () => {
     };
 
     const result = await account.getHolderInfo(
-      { apiUrl: 'https://api', graphqlUrl: 'https://gql', network: 'mainnet' },
+      TEST_CONFIG,
       { chainId: 'AELF', caHash: 'CA_HASH' },
     );
 
@@ -215,7 +219,7 @@ describe('core/account', () => {
 
     await expect(
       account.getHolderInfo(
-        { apiUrl: 'https://api', graphqlUrl: 'https://gql', network: 'mainnet' },
+        TEST_CONFIG,
         { chainId: 'AELF', caHash: 'MISSING_HASH' },
       ),
     ).rejects.toThrow('Holder not found');

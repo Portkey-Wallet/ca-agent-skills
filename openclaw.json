@@ -12,7 +12,15 @@
       "cwd": ".",
       "inputSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email address"
+          }
+        },
+        "required": [
+          "email"
+        ],
         "additionalProperties": true
       }
     },
@@ -21,12 +29,25 @@
       "description": "Get guardian list for an account",
       "command": "bun run portkey_query_skill.ts guardian-list",
       "args": [
-        "--identifier"
+        "--identifier",
+        "--chain-id"
       ],
       "cwd": ".",
       "inputSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "Guardian identifier"
+          },
+          "chain-id": {
+            "type": "string",
+            "description": "Chain ID, default AELF"
+          }
+        },
+        "required": [
+          "identifier"
+        ],
         "additionalProperties": true
       }
     },
@@ -96,12 +117,36 @@
       "command": "bun run portkey_auth_skill.ts send-code",
       "args": [
         "--email",
-        "--verifier-id"
+        "--verifier-id",
+        "--operation",
+        "--chain-id"
       ],
       "cwd": ".",
       "inputSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email address"
+          },
+          "verifier-id": {
+            "type": "string",
+            "description": "Verifier service ID"
+          },
+          "operation": {
+            "type": "string",
+            "description": "Operation type: register | recovery"
+          },
+          "chain-id": {
+            "type": "string",
+            "description": "Chain ID, default AELF"
+          }
+        },
+        "required": [
+          "email",
+          "verifier-id",
+          "operation"
+        ],
         "additionalProperties": true
       }
     },
@@ -113,12 +158,46 @@
         "--email",
         "--code",
         "--verifier-id",
-        "--session-id"
+        "--session-id",
+        "--operation",
+        "--chain-id"
       ],
       "cwd": ".",
       "inputSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email address"
+          },
+          "code": {
+            "type": "string",
+            "description": "6-digit verification code"
+          },
+          "verifier-id": {
+            "type": "string",
+            "description": "Verifier service ID"
+          },
+          "session-id": {
+            "type": "string",
+            "description": "Verifier session ID"
+          },
+          "operation": {
+            "type": "string",
+            "description": "Operation type: register | recovery"
+          },
+          "chain-id": {
+            "type": "string",
+            "description": "Chain ID, default AELF"
+          }
+        },
+        "required": [
+          "email",
+          "code",
+          "verifier-id",
+          "session-id",
+          "operation"
+        ],
         "additionalProperties": true
       }
     },
@@ -249,15 +328,28 @@
     },
     {
       "name": "portkey-query-token-list",
-      "description": "Get all tokens with balances for CA addresses across chains",
+      "description": "Get all tokens with balances for CA addresses across chains. Defaults to AA first and falls back to EOA on 401.",
       "command": "bun run portkey_query_skill.ts token-list",
       "args": [
-        "--ca-address-infos"
+        "--ca-address-infos",
+        "--strategy"
       ],
       "cwd": ".",
       "inputSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "ca-address-infos": {
+            "type": "string",
+            "description": "JSON array of { chainId, caAddress }"
+          },
+          "strategy": {
+            "type": "string",
+            "description": "aa | auto | eoa (default auto)"
+          }
+        },
+        "required": [
+          "ca-address-infos"
+        ],
         "additionalProperties": true
       }
     },
@@ -271,7 +363,15 @@
       "cwd": ".",
       "inputSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "ca-address-infos": {
+            "type": "string",
+            "description": "JSON array of { chainId, caAddress }"
+          }
+        },
+        "required": [
+          "ca-address-infos"
+        ],
         "additionalProperties": true
       }
     },
@@ -328,12 +428,35 @@
       "args": [
         "--email",
         "--manager",
-        "--guardians-approved"
+        "--guardians-approved",
+        "--chain-id"
       ],
       "cwd": ".",
       "inputSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email address"
+          },
+          "manager": {
+            "type": "string",
+            "description": "New manager wallet address"
+          },
+          "guardians-approved": {
+            "type": "string",
+            "description": "JSON array of approved guardians"
+          },
+          "chain-id": {
+            "type": "string",
+            "description": "Chain ID, default AELF"
+          }
+        },
+        "required": [
+          "email",
+          "manager",
+          "guardians-approved"
+        ],
         "additionalProperties": true
       }
     },

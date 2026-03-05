@@ -6,7 +6,6 @@ import packageJson from '../../package.json';
 import { getConfig } from '../../lib/config.js';
 import { createWallet } from '../../lib/aelf-client.js';
 import { validateRpcUrl } from '../../lib/http.js';
-import type { ApprovedGuardian, CaAddressInfo } from '../../lib/types.js';
 import { LoginType, OperationType } from '../../lib/types.js';
 import { fail } from './error.js';
 import { requireWallet } from './require-wallet.js';
@@ -50,7 +49,7 @@ function ok(data: unknown) {
 }
 
 /** Parse a JSON string and validate against a zod schema. */
-function parseJson<T>(raw: string, schema: z.ZodType<T>, label: string): T {
+function parseJson<S extends z.ZodTypeAny>(raw: string, schema: S, label: string): z.infer<S> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -69,6 +68,8 @@ const CaAddressInfoSchema = z.array(z.object({
   caAddress: z.string(),
 }));
 
+const TokenListStrategySchema = z.enum(['aa', 'auto', 'eoa']).default('auto');
+
 const GuardianApprovedSchema = z.array(z.object({
   identifier: z.string().optional(),
   identifierHash: z.string().optional(),
@@ -76,6 +77,14 @@ const GuardianApprovedSchema = z.array(z.object({
   verifierId: z.string(),
   verificationDoc: z.string(),
   signature: z.string(),
+}));
+
+const RecoveryGuardianApprovedSchema = z.array(z.object({
+  identifier: z.string().min(1),
+  type: z.union([z.string(), z.number()]),
+  verifierId: z.string().min(1),
+  verificationDoc: z.string().min(1),
+  signature: z.string().min(1),
 }));
 
 const GuardianToAddSchema = z.object({
@@ -95,6 +104,13 @@ const GuardianToRemoveSchema = z.object({
     id: z.string(),
   }),
 });
+
+const OPERATION_TYPE_MAP = {
+  register: OperationType.CreateCAHolder,
+  recovery: OperationType.SocialRecovery,
+  addGuardian: OperationType.AddGuardian,
+  deleteGuardian: OperationType.RemoveGuardian,
+} as const;
 
 // ---------------------------------------------------------------------------
 // 1. portkey_check_account
@@ -179,7 +195,7 @@ server.registerTool(
 server.registerTool(
   'portkey_send_code',
   {
-    description: 'Send a verification code to an email address. Use as the first step in registration or login. Requires a verifierId from portkey_get_verifier. Returns verifierSessionId needed for portkey_verify_code.',
+    description: 'Send a verification code to an email address. Use as the first step in registration or login. Requires a verifierId from portkey_get_verifier. operationType is required and has no default. Returns verifierSessionId needed for portkey_verify_code.',
     inputSchema: {
       email: z.string().email().describe('Email address to send code to'),
       verifierId: z.string().describe('Verifier service ID from portkey_get_verifier'),
@@ -189,15 +205,9 @@ server.registerTool(
     },
   },
   async ({ email, verifierId, chainId, operationType, network }) => {
-    const opMap: Record<string, OperationType> = {
-      register: OperationType.CreateCAHolder,
-      recovery: OperationType.SocialRecovery,
-      addGuardian: OperationType.AddGuardian,
-      deleteGuardian: OperationType.RemoveGuardian,
-    };
     try {
       return ok(await sendVerificationCode(getConfig({ network }), {
-        email, verifierId, chainId, operationType: opMap[operationType],
+        email, verifierId, chainId, operationType: OPERATION_TYPE_MAP[operationType],
       }));
     } catch (err) { return fail(err); }
   },
@@ -209,7 +219,7 @@ server.registerTool(
 server.registerTool(
   'portkey_verify_code',
   {
-    description: 'Verify a 6-digit code sent to an email. Use after portkey_send_code to complete verification. Returns signature and verificationDoc needed for registration or recovery.',
+    description: 'Verify a 6-digit code sent to an email. Use after portkey_send_code to complete verification. operationType is required and has no default. Returns signature and verificationDoc needed for registration or recovery.',
     inputSchema: {
       email: z.string().email().describe('Email address the code was sent to'),
       verificationCode: z.string().length(6).describe('6-digit verification code'),
@@ -221,15 +231,14 @@ server.registerTool(
     },
   },
   async ({ email, verificationCode, verifierId, verifierSessionId, chainId, operationType, network }) => {
-    const opMap: Record<string, OperationType> = {
-      register: OperationType.CreateCAHolder,
-      recovery: OperationType.SocialRecovery,
-      addGuardian: OperationType.AddGuardian,
-      deleteGuardian: OperationType.RemoveGuardian,
-    };
     try {
       return ok(await verifyCode(getConfig({ network }), {
-        email, verificationCode, verifierId, verifierSessionId, chainId, operationType: opMap[operationType],
+        email,
+        verificationCode,
+        verifierId,
+        verifierSessionId,
+        chainId,
+        operationType: OPERATION_TYPE_MAP[operationType],
       }));
     } catch (err) { return fail(err); }
   },
@@ -290,18 +299,14 @@ server.registerTool(
     inputSchema: {
       email: z.string().email().describe('Email address'),
       manager: z.string().describe('New manager wallet address'),
-      guardiansApproved: z.string().describe('JSON string of approved guardians array: [{ identifier, identifierHash, type, verifierId, verificationDoc, signature }]'),
+      guardiansApproved: z.string().describe('JSON string of approved guardians array: [{ identifier, type, verifierId, verificationDoc, signature }]'),
       chainId: CHAIN_ID.default('AELF'),
       network: NETWORK,
     },
   },
   async ({ email, manager, guardiansApproved, chainId, network }) => {
     try {
-      const parsed = parseJson(
-        guardiansApproved,
-        GuardianApprovedSchema,
-        'guardiansApproved',
-      ) as ApprovedGuardian[];
+      const parsed = parseJson(guardiansApproved, RecoveryGuardianApprovedSchema, 'guardiansApproved');
       return ok(await recoverWallet(getConfig({ network }), {
         email, manager, guardiansApproved: parsed, chainId,
       }));
@@ -356,16 +361,17 @@ server.registerTool(
 server.registerTool(
   'portkey_token_list',
   {
-    description: 'Get all tokens with balances for CA addresses across chains. Use to see the full token portfolio of a wallet. Returns array of tokens with balances, prices, and USD values.',
+    description: 'Get all tokens with balances for CA addresses across chains. Default strategy is "auto": query AA first, then fallback to EOA endpoint on 401. Returns tokens plus dataSource for traceability.',
     inputSchema: {
       caAddressInfos: z.string().describe('JSON array of { chainId, caAddress } objects'),
+      strategy: TokenListStrategySchema.describe('aa | auto | eoa'),
       network: NETWORK,
     },
   },
-  async ({ caAddressInfos, network }) => {
+  async ({ caAddressInfos, strategy, network }) => {
     try {
-      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos') as CaAddressInfo[];
-      return ok(await getTokenList(getConfig({ network }), { caAddressInfos: parsed }));
+      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos');
+      return ok(await getTokenList(getConfig({ network }), { caAddressInfos: parsed, strategy }));
     } catch (err) { return fail(err); }
   },
 );
@@ -384,7 +390,7 @@ server.registerTool(
   },
   async ({ caAddressInfos, network }) => {
     try {
-      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos') as CaAddressInfo[];
+      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos');
       return ok(await getNftCollections(getConfig({ network }), { caAddressInfos: parsed }));
     } catch (err) { return fail(err); }
   },
@@ -405,7 +411,7 @@ server.registerTool(
   },
   async ({ caAddressInfos, symbol, network }) => {
     try {
-      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos') as CaAddressInfo[];
+      const parsed = parseJson(caAddressInfos, CaAddressInfoSchema, 'caAddressInfos');
       return ok(await getNftItems(getConfig({ network }), { caAddressInfos: parsed, symbol }));
     } catch (err) { return fail(err); }
   },
@@ -558,7 +564,7 @@ server.registerTool(
           guardiansApproved,
           GuardianApprovedSchema,
           'guardiansApproved',
-        ) as ApprovedGuardian[],
+        ),
         chainId,
       }));
     } catch (err) { return fail(err); }
@@ -590,7 +596,7 @@ server.registerTool(
           guardiansApproved,
           GuardianApprovedSchema,
           'guardiansApproved',
-        ) as ApprovedGuardian[],
+        ),
         chainId,
       }));
     } catch (err) { return fail(err); }

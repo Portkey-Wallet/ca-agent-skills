@@ -1,5 +1,10 @@
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { coreMockState, installCoreModuleMocks, resetCoreMockState } from './core-mock-state';
+import {
+  MockHttpError,
+  coreMockState,
+  installCoreModuleMocks,
+  resetCoreMockState,
+} from './core-mock-state';
 
 installCoreModuleMocks();
 
@@ -18,8 +23,12 @@ beforeEach(() => {
 
 const config = {
   apiUrl: 'https://api',
+  eoaApiUrl: 'https://eoa-api',
   graphqlUrl: 'https://gql',
   network: 'mainnet' as const,
+  eoaFallbackEnabled: true,
+  eoaFallbackRetryCount: 2,
+  eoaFallbackRetryDelayMs: 200,
 };
 
 describe('core/assets', () => {
@@ -87,7 +96,117 @@ describe('core/assets', () => {
     });
 
     expect(result.data.length).toBe(1);
+    expect(result.dataSource).toBe('aa');
     expect(coreMockState.httpCalls[0]?.path).toBe('/api/app/user/assets/token');
+  });
+
+  test('getTokenList falls back to EOA on AA 401 when strategy=auto', async () => {
+    let tokenPostCount = 0;
+    coreMockState.httpPostImpl = async (path: string) => {
+      if (path === '/api/app/user/assets/token') {
+        tokenPostCount += 1;
+        if (tokenPostCount === 1) {
+          throw new MockHttpError(401, 'Unauthorized', '');
+        }
+        return { data: [{ symbol: 'ELF', balance: '1' }], totalRecordCount: 1 };
+      }
+      return {};
+    };
+    coreMockState.httpGetImpl = async (path: string) => {
+      if (path === '/api/app/search/chainsinfoindex') {
+        return { items: [{ chainId: 'AELF' }, { chainId: 'tDVV' }] };
+      }
+      return {};
+    };
+
+    const result = await assets.getTokenList(config, {
+      caAddressInfos: [{ chainId: 'AELF', caAddress: 'ELF_addr_AELF' }],
+      strategy: 'auto',
+    });
+
+    expect(result.dataSource).toBe('eoa-fallback');
+    expect(tokenPostCount).toBe(2);
+    const tokenCalls = coreMockState.httpCalls.filter((call) => call.path === '/api/app/user/assets/token');
+    expect(tokenCalls.length).toBe(2);
+    expect(tokenCalls[0]?.options?.data?.caAddressInfos?.length).toBe(1);
+    expect(tokenCalls[1]?.options?.data?.addressInfos?.length).toBe(2);
+    expect(tokenCalls[1]?.options?.data?.addressInfos?.[0]?.address).toBe('ELF_addr_AELF');
+  });
+
+  test('getTokenList supports strategy=eoa and validates strategy', async () => {
+    coreMockState.httpGetImpl = async () => ({ items: [{ chainId: 'AELF' }] });
+    coreMockState.httpPostImpl = async () => ({ data: [{ symbol: 'ELF' }], totalRecordCount: 1 });
+
+    const result = await assets.getTokenList(config, {
+      caAddressInfos: [{ chainId: 'AELF', caAddress: 'ELF_addr_AELF' }],
+      strategy: 'eoa',
+    });
+
+    expect(result.dataSource).toBe('eoa-direct');
+    expect(coreMockState.httpCalls[1]?.options?.data?.addressInfos?.[0]?.address).toBe('ELF_addr_AELF');
+
+    await expect(
+      assets.getTokenList(config, {
+        caAddressInfos: [{ chainId: 'AELF', caAddress: 'ELF_addr_AELF' }],
+        strategy: 'bad' as any,
+      }),
+    ).rejects.toThrow('strategy must be one of');
+  });
+
+  test('getTokenList does not fallback when eoaFallbackEnabled=false', async () => {
+    coreMockState.httpPostImpl = async () => {
+      throw new MockHttpError(401, 'Unauthorized', '');
+    };
+
+    const params = {
+      caAddressInfos: [{ chainId: 'AELF' as const, caAddress: 'ELF_addr_AELF' }],
+      strategy: 'auto' as const,
+    };
+
+    await expect(
+      assets.getTokenList(
+        { ...config, eoaFallbackEnabled: false },
+        params,
+      ),
+    ).rejects.toThrow('EOA fallback is disabled');
+    await expect(
+      assets.getTokenList(
+        { ...config, eoaFallbackEnabled: false },
+        params,
+      ),
+    ).rejects.toThrow('PORTKEY_EOA_FALLBACK_ENABLED=true');
+    await expect(
+      assets.getTokenList(
+        { ...config, eoaFallbackEnabled: false },
+        params,
+      ),
+    ).rejects.toThrow("strategy='eoa'");
+  });
+
+  test('getTokenList retries EOA request on transient upstream errors', async () => {
+    let tokenPostCount = 0;
+    coreMockState.httpPostImpl = async (path: string) => {
+      if (path === '/api/app/user/assets/token') {
+        tokenPostCount += 1;
+        if (tokenPostCount === 1) {
+          throw new MockHttpError(401, 'Unauthorized', '');
+        }
+        if (tokenPostCount === 2) {
+          throw new MockHttpError(500, 'Server Error', '');
+        }
+        return { data: [{ symbol: 'ELF' }], totalRecordCount: 1 };
+      }
+      return {};
+    };
+    coreMockState.httpGetImpl = async () => ({ items: [{ chainId: 'AELF' }] });
+
+    const result = await assets.getTokenList(config, {
+      caAddressInfos: [{ chainId: 'AELF', caAddress: 'ELF_addr_AELF' }],
+      strategy: 'auto',
+    });
+
+    expect(result.dataSource).toBe('eoa-fallback');
+    expect(tokenPostCount).toBe(3);
   });
 
   test('getNftCollections and getNftItems validate params and return data', async () => {

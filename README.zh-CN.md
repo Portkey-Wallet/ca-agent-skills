@@ -151,6 +151,38 @@ bun run bin/setup.ts uninstall cursor
 bun run bin/setup.ts uninstall openclaw --config-path ./my-openclaw.json
 ```
 
+## CLI 示例
+
+```bash
+# 检查邮箱是否注册
+bun run portkey_query_skill.ts check-account --email user@example.com
+
+# 获取链信息
+bun run portkey_query_skill.ts chain-info
+
+# 创建钱包
+bun run portkey_auth_skill.ts create-wallet
+
+# 恢复流程：operation 必填（不再默认 register）
+bun run portkey_auth_skill.ts send-code --email user@example.com --verifier-id <id> --operation recovery
+bun run portkey_auth_skill.ts verify-code --email user@example.com --code 123456 --verifier-id <id> --session-id <sid> --operation recovery
+
+# Token 列表策略：aa | auto | eoa（默认 auto）
+bun run portkey_query_skill.ts token-list --ca-address-infos '[{"chainId":"AELF","caAddress":"xxx"}]' --strategy auto
+```
+
+恢复证明校验：
+- `recover` 在提交前会先做本地校验。
+- 每个 guardian 的 `verificationDoc` 必须来自 `verify-code --operation recovery`；使用 register 证明会被拒绝。
+
+资产查询策略（`token-list`）：
+- `aa`：仅查 AA 接口（`/api/app/user/assets/token`）。
+- `auto`（默认）：先查 AA；若返回 `401 Unauthorized` 自动回退到 EOA 接口。
+- `eoa`：仅查 EOA 接口。
+- 可通过 `PORTKEY_EOA_FALLBACK_ENABLED=false` 关闭自动回退。
+- 回退重试可通过 `PORTKEY_EOA_FALLBACK_RETRY_COUNT` 与 `PORTKEY_EOA_FALLBACK_RETRY_DELAY_MS` 配置。
+- 回退时会动态读取 EOA `chainsinfoindex` 链列表（当前 mainnet 返回 `AELF`、`tDVV`）。
+
 ## SDK 使用示例
 
 ```typescript
@@ -252,7 +284,11 @@ saveKeystore({
 | `PORTKEY_SKILL_WALLET_CONTEXT_PATH` | 否 | `~/.portkey/skill-wallet/context.v1.json` | 覆盖共享 wallet context 路径 |
 | `PORTKEY_NETWORK` | 否 | `mainnet` | `mainnet` 或 `testnet` |
 | `PORTKEY_API_URL` | 否 | 按网络 | 覆盖 API 地址 |
+| `PORTKEY_EOA_API_URL` | 否 | 按网络 | 覆盖 token-list 回退使用的 EOA API 地址 |
 | `PORTKEY_GRAPHQL_URL` | 否 | 按网络 | 覆盖 GraphQL 地址 |
+| `PORTKEY_EOA_FALLBACK_ENABLED` | 否 | `true` | 是否启用 token-list 的 AA -> EOA 自动回退 |
+| `PORTKEY_EOA_FALLBACK_RETRY_COUNT` | 否 | `2` | 回退重试次数（包含首次请求） |
+| `PORTKEY_EOA_FALLBACK_RETRY_DELAY_MS` | 否 | `200` | 回退重试间隔（毫秒） |
 
 ## 测试
 

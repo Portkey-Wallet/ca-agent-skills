@@ -22,6 +22,42 @@ type OpenClawTool = {
   inputSchema: JsonObject;
 };
 
+type SchemaExpectation = {
+  properties: string[];
+  required: string[];
+};
+
+const EXACT_SCHEMA_EXPECTATIONS: Record<string, SchemaExpectation> = {
+  'portkey-query-check-account': {
+    properties: ['email'],
+    required: ['email'],
+  },
+  'portkey-query-guardian-list': {
+    properties: ['identifier', 'chain-id'],
+    required: ['identifier'],
+  },
+  'portkey-auth-send-code': {
+    properties: ['email', 'verifier-id', 'operation', 'chain-id'],
+    required: ['email', 'verifier-id', 'operation'],
+  },
+  'portkey-auth-verify-code': {
+    properties: ['email', 'code', 'verifier-id', 'session-id', 'operation', 'chain-id'],
+    required: ['email', 'code', 'verifier-id', 'session-id', 'operation'],
+  },
+  'portkey-auth-recover': {
+    properties: ['email', 'manager', 'guardians-approved', 'chain-id'],
+    required: ['email', 'manager', 'guardians-approved'],
+  },
+  'portkey-query-token-list': {
+    properties: ['ca-address-infos', 'strategy'],
+    required: ['ca-address-infos'],
+  },
+  'portkey-query-nft-collections': {
+    properties: ['ca-address-infos'],
+    required: ['ca-address-infos'],
+  },
+};
+
 function readJson(filePath: string): JsonObject {
   const content = fs.readFileSync(filePath, 'utf8');
   return JSON.parse(content) as JsonObject;
@@ -65,6 +101,99 @@ function buildSchemaFromParameters(parameters: JsonObject | undefined): JsonObje
   }
 
   return schema;
+}
+
+function uniqueSorted(values: string[]): string[] {
+  return [...new Set(values)].sort();
+}
+
+function toStringArray(value: JsonValue | undefined): string[] {
+  if (!Array.isArray(value)) return [];
+  return uniqueSorted(value.map((item) => String(item)));
+}
+
+function toJsonObject(value: JsonValue | undefined): JsonObject | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  return value as JsonObject;
+}
+
+function getSchemaProperties(schema: JsonObject): string[] {
+  const properties = toJsonObject(schema.properties);
+  if (!properties) return [];
+  return uniqueSorted(Object.keys(properties));
+}
+
+function getSchemaRequired(schema: JsonObject): string[] {
+  return toStringArray(schema.required);
+}
+
+function getFlagArgs(args: string[]): string[] {
+  return uniqueSorted(args.filter((arg) => arg.startsWith('--')).map((arg) => arg.slice(2)));
+}
+
+function sameStringSet(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((value, idx) => value === b[idx]);
+}
+
+function formatSet(values: string[]): string {
+  if (values.length === 0) return '(none)';
+  return values.join(', ');
+}
+
+function validateOpenclawSchemas(tools: OpenClawTool[]): void {
+  const toolsByName = new Map(tools.map((tool) => [tool.name, tool]));
+
+  for (const [toolName, expected] of Object.entries(EXACT_SCHEMA_EXPECTATIONS)) {
+    const tool = toolsByName.get(toolName);
+    if (!tool) {
+      throw new Error(
+        `[ERROR] Missing expected OpenClaw tool "${toolName}".`,
+      );
+    }
+
+    const expectedProperties = uniqueSorted(expected.properties);
+    const expectedRequired = uniqueSorted(expected.required);
+    const actualProperties = getSchemaProperties(tool.inputSchema);
+    const actualRequired = getSchemaRequired(tool.inputSchema);
+
+    if (!sameStringSet(actualProperties, expectedProperties)) {
+      throw new Error(
+        `[ERROR] OpenClaw exact schema mismatch for "${toolName}". ` +
+        `Expected properties: [${formatSet(expectedProperties)}]; actual: [${formatSet(actualProperties)}].`,
+      );
+    }
+    if (!sameStringSet(actualRequired, expectedRequired)) {
+      throw new Error(
+        `[ERROR] OpenClaw exact schema mismatch for "${toolName}". ` +
+        `Expected required: [${formatSet(expectedRequired)}]; actual: [${formatSet(actualRequired)}].`,
+      );
+    }
+  }
+
+  for (const tool of tools) {
+    const properties = getSchemaProperties(tool.inputSchema);
+    const required = getSchemaRequired(tool.inputSchema);
+    const flagArgs = getFlagArgs(tool.args);
+    const argSet = new Set(flagArgs);
+    const propertySet = new Set(properties);
+
+    const unknownProperties = properties.filter((key) => !argSet.has(key));
+    if (unknownProperties.length > 0) {
+      throw new Error(
+        `[ERROR] OpenClaw schema keys must be declared in args for "${tool.name}". ` +
+        `Unknown properties: [${formatSet(unknownProperties)}]. Declared flag args: [${formatSet(flagArgs)}].`,
+      );
+    }
+
+    const invalidRequired = required.filter((key) => !propertySet.has(key));
+    if (invalidRequired.length > 0) {
+      throw new Error(
+        `[ERROR] OpenClaw required keys must be included in inputSchema.properties for "${tool.name}". ` +
+        `Invalid required: [${formatSet(invalidRequired)}]. Properties: [${formatSet(properties)}].`,
+      );
+    }
+  }
 }
 
 function normalizeCommand(tool: JsonObject): { command: string; args: string[] } {
@@ -127,6 +256,7 @@ function normalizeOpenclaw(raw: JsonObject, pkg: JsonObject): JsonObject {
   }
 
   const tools = rawTools.map(normalizeTool);
+  validateOpenclawSchemas(tools);
 
   return {
     name: typeof raw.name === 'string' ? raw.name : String(pkg.name || 'skill-openclaw'),
