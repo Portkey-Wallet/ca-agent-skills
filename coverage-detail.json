@@ -3,9 +3,9 @@
   "coverageModel": "bun-text-all-files-by-file-average",
   "byFileAverage": {
     "lines": {
-      "total": 17,
-      "covered": 17,
-      "pct": 88.07842584886977
+      "total": 18,
+      "covered": 18,
+      "pct": 87.91253778529921
     },
     "functions": {
       "total": 0,
@@ -20,9 +20,9 @@
   },
   "weighted": {
     "lines": {
-      "total": 1562,
-      "covered": 1317,
-      "pct": 84.31498079385403
+      "total": 1813,
+      "covered": 1539,
+      "pct": 84.8869277440706
     },
     "functions": {
       "total": 0,
@@ -93,8 +93,26 @@
     {
       "file": "lib/config.ts",
       "lines": {
-        "total": 23,
-        "covered": 23,
+        "total": 74,
+        "covered": 72,
+        "pct": 97.2972972972973
+      },
+      "functions": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      },
+      "branches": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      }
+    },
+    {
+      "file": "lib/error-hints.ts",
+      "lines": {
+        "total": 9,
+        "covered": 9,
         "pct": 100
       },
       "functions": {
@@ -183,9 +201,9 @@
     {
       "file": "src/core/assets.ts",
       "lines": {
-        "total": 86,
-        "covered": 86,
-        "pct": 100
+        "total": 211,
+        "covered": 192,
+        "pct": 90.99526066350711
       },
       "functions": {
         "total": 0,
@@ -201,9 +219,9 @@
     {
       "file": "src/core/auth.ts",
       "lines": {
-        "total": 172,
-        "covered": 171,
-        "pct": 99.4186046511628
+        "total": 238,
+        "covered": 229,
+        "pct": 96.21848739495799
       },
       "functions": {
         "total": 0,
