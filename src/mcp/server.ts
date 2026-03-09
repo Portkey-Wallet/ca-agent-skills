@@ -59,6 +59,80 @@ function parseJson<S extends z.ZodTypeAny>(raw: string, schema: S, label: string
   return schema.parse(parsed);
 }
 
+const READ_ONLY_ANNOTATIONS = {
+  readOnlyHint: true,
+  read_only_hint: true,
+} as const;
+
+const LOCAL_WRITE_ANNOTATIONS = {
+  destructiveHint: true,
+  destructive_hint: true,
+} as const;
+
+const NETWORK_WRITE_ANNOTATIONS = {
+  destructiveHint: true,
+  destructive_hint: true,
+  openWorldHint: true,
+  side_effects_hint: true,
+} as const;
+
+const READ_ONLY_TOOLS = new Set([
+  'portkey_check_account',
+  'portkey_get_guardian_list',
+  'portkey_get_holder_info',
+  'portkey_get_chain_info',
+  'portkey_get_verifier',
+  'portkey_check_status',
+  'portkey_balance',
+  'portkey_token_list',
+  'portkey_nft_collections',
+  'portkey_nft_items',
+  'portkey_token_price',
+  'portkey_tx_result',
+  'portkey_view_call',
+  'portkey_wallet_status',
+  'portkey_get_active_wallet',
+]);
+
+const LOCAL_WRITE_TOOLS = new Set([
+  'portkey_create_wallet',
+  'portkey_save_keystore',
+  'portkey_unlock',
+  'portkey_lock',
+  'portkey_set_active_wallet',
+]);
+
+const NETWORK_WRITE_TOOLS = new Set([
+  'portkey_send_code',
+  'portkey_verify_code',
+  'portkey_register',
+  'portkey_recover',
+  'portkey_transfer',
+  'portkey_cross_chain_transfer',
+  'portkey_recover_stuck_transfer',
+  'portkey_add_guardian',
+  'portkey_remove_guardian',
+  'portkey_forward_call',
+]);
+
+function getToolAnnotations(name: string) {
+  if (READ_ONLY_TOOLS.has(name)) return READ_ONLY_ANNOTATIONS;
+  if (LOCAL_WRITE_TOOLS.has(name)) return LOCAL_WRITE_ANNOTATIONS;
+  if (NETWORK_WRITE_TOOLS.has(name)) return NETWORK_WRITE_ANNOTATIONS;
+  return undefined;
+}
+
+const baseRegisterTool = (server.registerTool as any).bind(server);
+(server as any).registerTool = (name: string, definition: any, handler: any) =>
+  baseRegisterTool(
+    name,
+    {
+      ...definition,
+      annotations: getToolAnnotations(name),
+    },
+    handler,
+  );
+
 // ---------------------------------------------------------------------------
 // Shared zod schemas for JSON string inputs
 // ---------------------------------------------------------------------------

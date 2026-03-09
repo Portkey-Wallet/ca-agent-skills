@@ -141,15 +141,41 @@ bun run bin/setup.ts cursor          # Cursor（项目级）
 bun run bin/setup.ts cursor --global # Cursor（全局）
 bun run bin/setup.ts openclaw        # OpenClaw — 输出配置到 stdout
 bun run bin/setup.ts openclaw --config-path ./my-openclaw.json  # 合并到已有配置
+bun run bin/setup.ts ironclaw        # IronClaw — 安装 trusted skill + stdio MCP server
 
-# 查看配置状态（Claude / Cursor / OpenClaw）
+# 查看配置状态（Claude / Cursor / OpenClaw / IronClaw）
 bun run bin/setup.ts list
 
 # 卸载
 bun run bin/setup.ts uninstall claude
 bun run bin/setup.ts uninstall cursor
 bun run bin/setup.ts uninstall openclaw --config-path ./my-openclaw.json
+bun run bin/setup.ts uninstall ironclaw
 ```
+
+### IronClaw
+
+```bash
+# 安装 trusted skill + stdio MCP server
+bun run bin/setup.ts ironclaw
+
+# 移除 IronClaw 集成
+bun run bin/setup.ts uninstall ironclaw
+```
+
+IronClaw 默认会做两件事：
+
+- 向 `~/.ironclaw/mcp-servers.json` 写入一个 stdio MCP server
+- 把当前仓库的 `SKILL.md` 复制到 `~/.ironclaw/skills/portkey-ca-agent-skills/SKILL.md`
+
+关于 trust model 的重要说明：
+
+- 需要 CA 钱包写操作时，务必使用上面的 trusted skill 路径。
+- 如果你把这个包放进 `~/.ironclaw/installed_skills/`，不要期待它还能正常执行注册、恢复、转账、Guardian 管理等写操作。
+- IronClaw 会把 installed skill 的工具权限衰减为只读，这会表现成“只能查，不能写”，即使 MCP server 本身是可用的。
+
+当前 MCP server 已为 CA 写操作补齐 destructive annotations，IronClaw 可以据此在注册、恢复、转账、Guardian、合约调用前请求 approval。
+为兼容当前 IronClaw 源码，这里的 MCP annotations 会同时输出标准 MCP 的 camelCase 字段和 IronClaw 兼容的 snake_case 字段，因为 IronClaw 目前按 snake_case 解析 MCP approval hints。
 
 ## CLI 示例
 
@@ -298,6 +324,14 @@ bun run test:unit           # 单元测试
 bun run test:integration    # 集成测试（需要网络）
 bun run test:e2e            # E2E 测试（需要私钥）
 ```
+
+### IronClaw Smoke Test
+
+1. 执行 `bun run bin/setup.ts ironclaw`
+2. 先问一个只读问题，比如 `show my guardian list for this Portkey CA wallet`
+3. 再问一个本地写操作，比如 `create a new Portkey CA wallet`
+4. 再问一个链上写操作，比如 `transfer 1 ELF from my CA wallet`
+5. 确认 CA 场景会命中这个 skill，而 EOA wallet lifecycle 场景不会误路由过来
 
 ## 安全
 

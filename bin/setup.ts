@@ -5,6 +5,13 @@ import * as path from 'path';
 import packageJson from '../package.json';
 import { setupClaude } from './platforms/claude.js';
 import { setupCursor } from './platforms/cursor.js';
+import {
+  getIronclawMcpConfigPath,
+  getIronclawSkillInstallPath,
+  getIronclawSkillsDir,
+  setupIronclaw,
+  uninstallIronclaw,
+} from './platforms/ironclaw.js';
 import { setupOpenClaw } from './platforms/openclaw.js';
 import {
   getPackageRoot,
@@ -53,6 +60,25 @@ program
       serverPath: opts.serverPath,
       force: opts.force,
       global: opts.global,
+    });
+  });
+
+// ---------------------------------------------------------------------------
+// ironclaw
+// ---------------------------------------------------------------------------
+program
+  .command('ironclaw')
+  .description('Setup trusted skill and MCP server for IronClaw')
+  .option('--mcp-config-path <path>', 'Custom IronClaw MCP config path')
+  .option('--skills-dir <path>', 'Custom IronClaw trusted skills directory')
+  .option('--server-path <path>', 'Custom MCP server path')
+  .option('--force', 'Overwrite existing entry')
+  .action((opts) => {
+    setupIronclaw({
+      mcpConfigPath: opts.mcpConfigPath,
+      skillsDir: opts.skillsDir,
+      serverPath: opts.serverPath,
+      force: opts.force,
     });
   });
 
@@ -116,6 +142,19 @@ program
       console.log(`  OpenClaw: [NOT FOUND] ${resolvedOpenclawPath}`);
     }
 
+    const ironclawMcpPath = getIronclawMcpConfigPath();
+    const ironclawSkillsDir = getIronclawSkillsDir();
+    const ironclawSkillPath = getIronclawSkillInstallPath(ironclawSkillsDir);
+    const ironclawMcpExists = fs.existsSync(ironclawMcpPath);
+    const ironclawConfig = ironclawMcpExists ? readJsonFile(ironclawMcpPath) : null;
+    const ironclawHasPortkey = Array.isArray(ironclawConfig?.servers)
+      ? ironclawConfig.servers.some((server: any) => server?.name === SERVER_NAME)
+      : false;
+    const ironclawSkillExists = fs.existsSync(ironclawSkillPath);
+    console.log(
+      `  IronClaw: ${ironclawHasPortkey || ironclawSkillExists ? '[CONFIGURED]' : '[NOT CONFIGURED]'} MCP=${ironclawMcpPath} skill=${ironclawSkillPath}`,
+    );
+
     console.log('');
   });
 
@@ -124,11 +163,21 @@ program
 // ---------------------------------------------------------------------------
 program
   .command('uninstall <platform>')
-  .description('Remove Portkey config from a platform (claude, cursor, openclaw)')
+  .description('Remove Portkey config from a platform (claude, cursor, ironclaw, openclaw)')
   .option('--global', 'Target global Cursor config')
   .option('--config-path <path>', 'Custom config file path')
+  .option('--mcp-config-path <path>', 'Custom IronClaw MCP config path')
+  .option('--skills-dir <path>', 'Custom IronClaw trusted skills directory')
   .action((platform, opts) => {
     const paths = getPlatformPaths();
+
+    if (platform === 'ironclaw') {
+      uninstallIronclaw({
+        mcpConfigPath: opts.mcpConfigPath,
+        skillsDir: opts.skillsDir,
+      });
+      return;
+    }
 
     // --- OpenClaw: remove tools by name prefix from a config file ---
     if (platform === 'openclaw') {
@@ -167,7 +216,7 @@ program
     } else if (platform === 'cursor') {
       configPath = opts.global ? paths.cursorGlobal : paths.cursorProject;
     } else {
-      console.error(`[ERROR] Unknown platform: ${platform}. Use "claude", "cursor", or "openclaw".`);
+      console.error(`[ERROR] Unknown platform: ${platform}. Use "claude", "cursor", "ironclaw", or "openclaw".`);
       process.exit(1);
     }
 

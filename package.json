@@ -16,6 +16,7 @@
     "src/",
     "lib/",
     "bin/",
+    "SKILL.md",
     "cli-helpers.ts",
     "portkey_*_skill.ts",
     "openclaw.json",
