@@ -1,6 +1,6 @@
 ---
 name: "portkey-ca-agent-skills"
-version: "1.1.6"
+version: "2.0.0"
 description: "Portkey CA wallet registration/auth/guardian/transfer operations for agents."
 activation:
   keywords:
@@ -52,6 +52,13 @@ activation:
 - Generate OpenClaw config: `bun run build:openclaw`
 - Verify OpenClaw config: `bun run build:openclaw:check`
 - Run CI coverage gate: `bun run test:coverage:ci`
+
+## Distribution / Activation
+- GitHub repo/tree URLs are discovery-only for hosts and agents.
+- Preferred IronClaw activation from npm: `bunx -p @portkey/ca-agent-skills portkey-ca-setup ironclaw`
+- Preferred OpenClaw activation from npm when managed install is unavailable: `bunx -p @portkey/ca-agent-skills portkey-ca-setup openclaw`
+- Local repo checkout is for development and smoke tests only.
+- Migration note: `portkey-setup` was removed in `2.0.0`; use `portkey-ca-setup` for npm-based activation.
 
 ## Limits / Non-goals
 - This skill focuses on domain operations and adapters; it is not a full wallet custody system.

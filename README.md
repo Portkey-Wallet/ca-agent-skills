@@ -207,6 +207,14 @@ Important trust model note:
 The MCP server exposes destructive annotations for CA write operations so IronClaw can request approval before registration, recovery, transfer, guardian, and contract calls.
 For compatibility, the MCP server currently emits both standard MCP camelCase annotations and IronClaw-compatible snake_case annotations because the current IronClaw source parses snake_case fields for MCP approval hints.
 
+Remote activation contract:
+
+- GitHub repo/tree URLs are discovery sources only, not the final IronClaw install payload.
+- Preferred IronClaw activation from npm: `bunx -p @portkey/ca-agent-skills portkey-ca-setup ironclaw`
+- Prefer ClawHub / managed install for OpenClaw when available; otherwise use `bunx -p @portkey/ca-agent-skills portkey-ca-setup openclaw`
+- Local repo checkout remains a development smoke-test path only.
+- Migration note: `portkey-setup` was removed in `2.0.0`; switch npm-based activation to `portkey-ca-setup`.
+
 ## Usage
 
 ### MCP (Claude Desktop / Cursor)

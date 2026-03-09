@@ -23,7 +23,7 @@ import {
 
 const program = new Command();
 program
-  .name('portkey-setup')
+  .name('portkey-ca-setup')
   .version(packageJson.version)
   .description('Configure Portkey Agent Skills for AI platforms');
 
