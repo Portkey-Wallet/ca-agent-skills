@@ -8,7 +8,7 @@ import { getTokenBalance, getTokenList, getNftCollections, getNftItems, getToken
 import { callContractViewMethod } from './src/core/contract.js';
 import { getTransactionResult } from './src/core/transfer.js';
 import { validateRpcUrl } from './lib/http.js';
-import type { CaAddressInfo } from './lib/types.js';
+import type { CaAddressInfo, TokenListStrategy } from './lib/types.js';
 
 const program = new Command();
 program.name('portkey-query').version(packageJson.version).description('Portkey wallet query tools')
@@ -76,11 +76,13 @@ program.command('balance')
 program.command('token-list')
   .description('Get all tokens with balances')
   .requiredOption('--ca-address-infos <json>', 'JSON array of { chainId, caAddress }')
+  .option('--strategy <strategy>', 'Strategy: aa | auto | eoa', 'auto')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
       outputSuccess(await getTokenList(config, {
         caAddressInfos: safeJsonParse(opts.caAddressInfos, 'ca-address-infos') as CaAddressInfo[],
+        strategy: String(opts.strategy || 'auto').toLowerCase() as TokenListStrategy,
       }));
     } catch (err: any) { outputError(err.message); }
   });

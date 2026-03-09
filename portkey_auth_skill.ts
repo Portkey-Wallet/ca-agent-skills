@@ -19,6 +19,14 @@ const program = new Command();
 program.name('portkey-auth').version(packageJson.version).description('Portkey wallet registration & login tools')
   .option('--network <network>', 'mainnet or testnet', 'mainnet');
 
+function parseOperationType(operation: string): OperationType {
+  const normalized = String(operation || '').toLowerCase().trim();
+  if (normalized === 'register') return OperationType.CreateCAHolder;
+  if (normalized === 'recovery') return OperationType.SocialRecovery;
+  outputError(`Invalid --operation "${operation}". Expected "register" or "recovery".`);
+  return OperationType.Unknown; // unreachable
+}
+
 program.command('get-verifier')
   .description('Get an assigned verifier server')
   .option('--chain-id <chainId>', 'Chain ID', 'AELF')
@@ -33,18 +41,14 @@ program.command('send-code')
   .description('Send verification code to email')
   .requiredOption('--email <email>', 'Email address')
   .requiredOption('--verifier-id <id>', 'Verifier service ID')
+  .requiredOption('--operation <type>', 'Operation type: register|recovery')
   .option('--chain-id <chainId>', 'Chain ID', 'AELF')
-  .option('--operation <type>', 'Operation type: register|recovery', 'register')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
-      const opMap: Record<string, OperationType> = {
-        register: OperationType.CreateCAHolder,
-        recovery: OperationType.SocialRecovery,
-      };
       outputSuccess(await sendVerificationCode(config, {
         email: opts.email, verifierId: opts.verifierId,
-        chainId: opts.chainId, operationType: opMap[opts.operation] ?? OperationType.CreateCAHolder,
+        chainId: opts.chainId, operationType: parseOperationType(opts.operation),
       }));
     } catch (err: any) { outputError(err.message); }
   });
@@ -55,19 +59,15 @@ program.command('verify-code')
   .requiredOption('--code <code>', '6-digit verification code')
   .requiredOption('--verifier-id <id>', 'Verifier service ID')
   .requiredOption('--session-id <id>', 'Verifier session ID')
+  .requiredOption('--operation <type>', 'Operation type: register|recovery')
   .option('--chain-id <chainId>', 'Chain ID', 'AELF')
-  .option('--operation <type>', 'Operation type: register|recovery', 'register')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
-      const opMap: Record<string, OperationType> = {
-        register: OperationType.CreateCAHolder,
-        recovery: OperationType.SocialRecovery,
-      };
       outputSuccess(await verifyCode(config, {
         email: opts.email, verificationCode: opts.code,
         verifierId: opts.verifierId, verifierSessionId: opts.sessionId,
-        chainId: opts.chainId, operationType: opMap[opts.operation] ?? OperationType.CreateCAHolder,
+        chainId: opts.chainId, operationType: parseOperationType(opts.operation),
       }));
     } catch (err: any) { outputError(err.message); }
   });

@@ -15,8 +15,12 @@ beforeEach(() => {
 
 const config = {
   apiUrl: 'https://api.portkey',
+  eoaApiUrl: 'https://eoa-api.portkey',
   graphqlUrl: 'https://gql.portkey',
   network: 'mainnet' as const,
+  eoaFallbackEnabled: true,
+  eoaFallbackRetryCount: 2,
+  eoaFallbackRetryDelayMs: 200,
 };
 
 describe('core/auth', () => {
@@ -145,7 +149,7 @@ describe('core/auth', () => {
             type: 0,
             identifier: 'u@a.com',
             verifierId: 'v1',
-            verificationDoc: 'doc',
+            verificationDoc: '0,a,b,c,d,2,9992731',
             signature: 'sig',
           },
         ],
@@ -162,12 +166,48 @@ describe('core/auth', () => {
           type: 0,
           identifier: 'u@a.com',
           verifierId: 'v1',
-          verificationDoc: 'doc',
+          verificationDoc: '0,a,b,c,d,2,9992731',
           signature: 'sig',
         },
       ],
     });
     expect(ok.sessionId).toBe('recover-1');
+  });
+
+  test('recoverWallet rejects malformed guardiansApproved payload', async () => {
+    await expect(
+      auth.recoverWallet(config, {
+        email: 'u@a.com',
+        manager: 'mgr',
+        chainId: 'AELF',
+        guardiansApproved: [
+          {
+            type: 0,
+            identifier: '',
+            verifierId: 'v1',
+            verificationDoc: '0,a,b,c,d,2,9992731',
+            signature: 'sig',
+          },
+        ] as any,
+      }),
+    ).rejects.toThrow('guardiansApproved[0].identifier is required');
+
+    await expect(
+      auth.recoverWallet(config, {
+        email: 'u@a.com',
+        manager: 'mgr',
+        chainId: 'AELF',
+        guardiansApproved: [
+          {
+            type: 'Email',
+            identifier: 'u@a.com',
+            verifierId: 'v1',
+            verificationDoc: '0,a,b,c,d,1,9992731',
+            signature: 'sig',
+          },
+        ] as any,
+      }),
+    ).rejects.toThrow('operation "recovery"');
   });
 
   test('checkRegisterOrRecoveryStatus handles pending/pass/fail', async () => {
@@ -203,5 +243,39 @@ describe('core/auth', () => {
       type: 'register',
     });
     expect(pending2).toEqual({ status: 'pending' });
+  });
+
+  test('checkRegisterOrRecoveryStatus maps known recovery failure hints', async () => {
+    coreMockState.httpGetImpl = async () => ({
+      items: [
+        {
+          recoveryStatus: 'fail',
+          recoveryMessage: 'Transaction status: NODEVALIDATIONFAILED. Error: AElf.Sdk.CSharp.AssertionException: Please complete the approval of all guardians',
+        },
+      ],
+    });
+
+    const approvalFail = await auth.checkRegisterOrRecoveryStatus(config, {
+      sessionId: 's5',
+      type: 'recovery',
+    });
+    expect(approvalFail.status).toBe('fail');
+    expect(approvalFail.failMessage).toContain('verify-code --operation recovery');
+
+    coreMockState.httpGetImpl = async () => ({
+      items: [
+        {
+          recoveryStatus: 'fail',
+          recoveryMessage: 'Error mapping types.\nDestination Member:\nGuardianApproved\n',
+        },
+      ],
+    });
+
+    const mappingFail = await auth.checkRegisterOrRecoveryStatus(config, {
+      sessionId: 's6',
+      type: 'recovery',
+    });
+    expect(mappingFail.status).toBe('fail');
+    expect(mappingFail.failMessage).toContain('guardiansApproved must include');
   });
 });

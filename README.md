@@ -216,9 +216,20 @@ bun run portkey_query_skill.ts chain-info
 # Create wallet
 bun run portkey_auth_skill.ts create-wallet
 
+# Recovery flow: operation is required (no implicit default)
+bun run portkey_auth_skill.ts send-code --email user@example.com --verifier-id <id> --operation recovery
+bun run portkey_auth_skill.ts verify-code --email user@example.com --code 123456 --verifier-id <id> --session-id <sid> --operation recovery
+
+# Token list strategy: aa | auto | eoa (default: auto)
+bun run portkey_query_skill.ts token-list --ca-address-infos '[{"chainId":"AELF","caAddress":"xxx"}]' --strategy auto
+
 # Transfer tokens (requires PORTKEY_PRIVATE_KEY env)
 bun run portkey_tx_skill.ts transfer --ca-hash xxx --token-contract xxx --symbol ELF --to xxx --amount 100000000 --chain-id AELF
 ```
+
+Recovery proof validation:
+- `recover` now validates each guardian proof locally before submitting.
+- Guardian `verificationDoc` must come from `verify-code` with `--operation recovery`; register proofs are rejected.
 
 ### SDK
 
@@ -243,10 +254,18 @@ const balance = await getTokenBalance(config, {
 
 ## Network
 
-| Network | Chain IDs | API URL |
-|---------|-----------|---------|
-| mainnet (default) | AELF, tDVV | `https://aa-portkey.portkey.finance` |
-| testnet | AELF, tDVW | `https://aa-portkey-test.portkey.finance` |
+| Network | Chain IDs | AA API URL | EOA API URL |
+|---------|-----------|------------|-------------|
+| mainnet (default) | AELF, tDVV | `https://aa-portkey.portkey.finance` | `https://eoa-portkey.portkey.finance` |
+| testnet | AELF, tDVW | `https://aa-portkey-test.portkey.finance` | `https://eoa-portkey-test.portkey.finance` |
+
+Asset query strategy (`token-list`):
+- `aa`: query AA endpoint only (`/api/app/user/assets/token`).
+- `auto` (default): AA first; if `401 Unauthorized`, auto-fallback to EOA endpoint.
+- `eoa`: query EOA endpoint only.
+- Fallback can be disabled with `PORTKEY_EOA_FALLBACK_ENABLED=false`.
+- Fallback retry behavior is configurable via `PORTKEY_EOA_FALLBACK_RETRY_COUNT` and `PORTKEY_EOA_FALLBACK_RETRY_DELAY_MS`.
+- In fallback mode, chain scope is loaded from EOA `chainsinfoindex` dynamically (currently mainnet returns `AELF`, `tDVV`).
 
 ## Environment Variables
 
@@ -257,7 +276,11 @@ const balance = await getTokenBalance(config, {
 | `PORTKEY_SKILL_WALLET_CONTEXT_PATH` | No | `~/.portkey/skill-wallet/context.v1.json` | Override shared wallet context path |
 | `PORTKEY_NETWORK` | No | `mainnet` | `mainnet` or `testnet` |
 | `PORTKEY_API_URL` | No | Per network | Override API endpoint |
+| `PORTKEY_EOA_API_URL` | No | Per network | Override EOA API endpoint used by token-list fallback |
 | `PORTKEY_GRAPHQL_URL` | No | Per network | Override GraphQL endpoint |
+| `PORTKEY_EOA_FALLBACK_ENABLED` | No | `true` | Enable/disable AA -> EOA fallback in token-list auto mode |
+| `PORTKEY_EOA_FALLBACK_RETRY_COUNT` | No | `2` | Fallback retry attempts (including first attempt) |
+| `PORTKEY_EOA_FALLBACK_RETRY_DELAY_MS` | No | `200` | Delay between fallback retries in milliseconds |
 
 ## Testing
 

@@ -5,8 +5,12 @@ import type { PortkeyConfig } from '../../lib/types';
 describe('lib/http', () => {
   const mockConfig: PortkeyConfig = {
     apiUrl: 'https://aa-portkey.portkey.finance',
+    eoaApiUrl: 'https://eoa-portkey.portkey.finance',
     graphqlUrl: 'https://indexer-api.aefinder.io/api/app/graphql/portkey',
     network: 'mainnet',
+    eoaFallbackEnabled: true,
+    eoaFallbackRetryCount: 2,
+    eoaFallbackRetryDelayMs: 200,
   };
 
   it('should create an HTTP client with get/post/put/del methods', () => {

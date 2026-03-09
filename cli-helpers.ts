@@ -1,3 +1,5 @@
+import { withPortkeyRecoveryHint } from './lib/error-hints.js';
+
 /**
  * CLI output helpers.
  * Standardized JSON output for success, structured error for failure.
@@ -8,7 +10,7 @@ export function outputSuccess(data: unknown): void {
 }
 
 export function outputError(message: string): void {
-  console.error(`[ERROR] ${message}`);
+  console.error(`[ERROR] ${withPortkeyRecoveryHint(message)}`);
   process.exit(1);
 }
 

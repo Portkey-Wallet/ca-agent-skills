@@ -9,15 +9,27 @@ export type ChainId = 'AELF' | 'tDVV' | 'tDVW';
 export interface PortkeyConfig {
   /** Portkey backend API base URL */
   apiUrl: string;
+  /** Portkey EOA backend API base URL (for asset fallback) */
+  eoaApiUrl: string;
   /** GraphQL / Indexer URL */
   graphqlUrl: string;
   /** Network type */
   network: NetworkType;
+  /** Enable or disable AA->EOA fallback in token-list auto mode */
+  eoaFallbackEnabled: boolean;
+  /** Maximum EOA fallback attempts (including the first attempt) */
+  eoaFallbackRetryCount: number;
+  /** Delay between EOA fallback retries in milliseconds */
+  eoaFallbackRetryDelayMs: number;
 }
 
 export interface NetworkDefaults {
   apiUrl: string;
+  eoaApiUrl: string;
   graphqlUrl: string;
+  eoaFallbackEnabled: boolean;
+  eoaFallbackRetryCount: number;
+  eoaFallbackRetryDelayMs: number;
 }
 
 // ============================================================================
@@ -181,7 +193,7 @@ export interface RecoverParams {
   /** Manager wallet address */
   manager: string;
   /** Array of approved guardians with their verification proofs */
-  guardiansApproved: ApprovedGuardian[];
+  guardiansApproved: RecoveryApprovedGuardian[];
   /** Origin chain ID */
   chainId: ChainId;
   /** Encoded device/extra data */
@@ -203,6 +215,14 @@ export interface ApprovedGuardian {
   verificationDoc: string;
   /** Signature from verifier */
   signature: string;
+}
+
+/**
+ * Recovery requires full guardian proofs with plain identifier.
+ */
+export interface RecoveryApprovedGuardian extends ApprovedGuardian {
+  /** Guardian identifier (email, phone, social ID) */
+  identifier: string;
 }
 
 export interface RegisterOrRecoverResult {
@@ -268,11 +288,16 @@ export interface TokenBalanceResult {
 export interface TokenListParams {
   /** Array of CA address info across chains */
   caAddressInfos: CaAddressInfo[];
+  /** Query strategy: aa only, eoa only, or auto(aa then eoa fallback on 401) */
+  strategy?: TokenListStrategy;
   /** Skip count for pagination */
   skipCount?: number;
   /** Max result count */
   maxResultCount?: number;
 }
+
+export type TokenListStrategy = 'aa' | 'auto' | 'eoa';
+export type TokenListDataSource = 'aa' | 'eoa-fallback' | 'eoa-direct';
 
 export interface TokenItem {
   chainId: ChainId;
@@ -289,6 +314,8 @@ export interface TokenItem {
 export interface TokenListResult {
   data: TokenItem[];
   totalRecordCount: number;
+  /** Data source used for this response */
+  dataSource?: TokenListDataSource;
 }
 
 export interface NftCollectionParams {

@@ -11,8 +11,10 @@ import type {
   NftItemResult,
   TokenPriceParams,
   TokenPriceItem,
+  TokenListDataSource,
+  TokenListStrategy,
 } from '../../lib/types.js';
-import { createHttpClient } from '../../lib/http.js';
+import { createHttpClient, HttpError } from '../../lib/http.js';
 import { callViewMethod } from '../../lib/aelf-client.js';
 import { getChainInfoByChainId } from './account.js';
 
@@ -79,6 +81,37 @@ export async function getTokenList(
 ): Promise<TokenListResult> {
   if (!params.caAddressInfos?.length) throw new Error('caAddressInfos is required');
 
+  const strategy: TokenListStrategy = params.strategy || 'auto';
+  if (!['aa', 'auto', 'eoa'].includes(strategy)) {
+    throw new Error(`strategy must be one of: aa | auto | eoa`);
+  }
+
+  if (strategy === 'aa') {
+    return getTokenListFromAa(config, params, 'aa');
+  }
+
+  if (strategy === 'eoa') {
+    return getTokenListFromEoa(config, params, 'eoa-direct');
+  }
+
+  try {
+    return await getTokenListFromAa(config, params, 'aa');
+  } catch (err) {
+    if (!isUnauthorizedError(err)) throw err;
+    if (!isEoaFallbackEnabled(config)) {
+      throw new Error(
+        "AA token-list returned 401 and EOA fallback is disabled. Set PORTKEY_EOA_FALLBACK_ENABLED=true to enable fallback, or use strategy='eoa' to query EOA directly (or strategy='aa' for AA-only).",
+      );
+    }
+    return getTokenListFromEoa(config, params, 'eoa-fallback');
+  }
+}
+
+async function getTokenListFromAa(
+  config: PortkeyConfig,
+  params: TokenListParams,
+  dataSource: TokenListDataSource,
+): Promise<TokenListResult> {
   const http = createHttpClient(config);
 
   const result = await http.post<TokenListResult>('/api/app/user/assets/token', {
@@ -89,7 +122,132 @@ export async function getTokenList(
     },
   });
 
-  return result;
+  return { ...result, dataSource };
+}
+
+async function getTokenListFromEoa(
+  config: PortkeyConfig,
+  params: TokenListParams,
+  dataSource: TokenListDataSource,
+): Promise<TokenListResult> {
+  const eoaConfig: PortkeyConfig = {
+    ...config,
+    apiUrl: resolveEoaApiUrl(config),
+  };
+  const eoaHttp = createHttpClient(eoaConfig);
+
+  const chainIds = await getEoaAvailableChainIds(eoaConfig, eoaHttp, params.caAddressInfos);
+  const uniqueAddresses = [...new Set(params.caAddressInfos.map((item) => item.caAddress))];
+  const addressInfos = uniqueAddresses.flatMap((address) =>
+    chainIds.map((chainId) => ({ chainId, address })),
+  );
+
+  const result = await withEoaRetry(
+    eoaConfig,
+    () => eoaHttp.post<TokenListResult & Record<string, unknown>>('/api/app/user/assets/token', {
+      data: {
+        addressInfos,
+        skipCount: params.skipCount || 0,
+        maxResultCount: params.maxResultCount || 100,
+      },
+    }),
+    'EOA token-list',
+  );
+
+  return {
+    ...result,
+    dataSource,
+  };
+}
+
+function resolveEoaApiUrl(config: PortkeyConfig): string {
+  const eoaApiUrl = String(config.eoaApiUrl || '').trim();
+  if (!eoaApiUrl) {
+    throw new Error(
+      `EOA fallback is enabled but eoaApiUrl is missing for network "${config.network}". Set PORTKEY_EOA_API_URL.`,
+    );
+  }
+  return eoaApiUrl;
+}
+
+async function getEoaAvailableChainIds(
+  config: PortkeyConfig,
+  http: ReturnType<typeof createHttpClient>,
+  caAddressInfos: TokenListParams['caAddressInfos'],
+): Promise<string[]> {
+  try {
+    const chainInfo = await withEoaRetry(
+      config,
+      () => http.get<{ items?: Array<{ chainId?: string }> }>('/api/app/search/chainsinfoindex'),
+      'EOA chainsinfoindex',
+    );
+    const chainIds = [...new Set((chainInfo.items || []).map((item) => item.chainId).filter(Boolean))] as string[];
+    if (chainIds.length > 0) return chainIds;
+  } catch {
+    // Fall back to user-provided chains below.
+  }
+
+  const fallbackChainIds = [...new Set(caAddressInfos.map((item) => item.chainId))];
+  if (fallbackChainIds.length === 0) {
+    throw new Error('Unable to resolve chain IDs for EOA token-list fallback');
+  }
+  return fallbackChainIds;
+}
+
+async function withEoaRetry<T>(
+  config: PortkeyConfig,
+  fn: () => Promise<T>,
+  operationName: string,
+): Promise<T> {
+  const configuredAttempts = Number(config.eoaFallbackRetryCount);
+  const attempts = Number.isInteger(configuredAttempts) && configuredAttempts >= 1
+    ? configuredAttempts
+    : 1;
+  const configuredDelay = Number(config.eoaFallbackRetryDelayMs);
+  const delayUnitMs = Number.isFinite(configuredDelay) && configuredDelay >= 1
+    ? configuredDelay
+    : 200;
+  let lastError: unknown;
+
+  for (let i = 1; i <= attempts; i += 1) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      const canRetry = i < attempts && isRetryableEoaError(err);
+      if (!canRetry) break;
+      const delayMs = delayUnitMs * i;
+      await sleep(delayMs);
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw new Error(`${operationName} failed after ${attempts} attempt(s): ${lastError.message}`);
+  }
+  throw new Error(`${operationName} failed after ${attempts} attempt(s).`);
+}
+
+function isRetryableEoaError(err: unknown): boolean {
+  if (err instanceof HttpError) {
+    if (err.statusCode === 408 || err.statusCode === 429) return true;
+    if (err.statusCode >= 500) return true;
+    return false;
+  }
+  return true;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isEoaFallbackEnabled(config: PortkeyConfig): boolean {
+  return config.eoaFallbackEnabled !== false;
+}
+
+function isUnauthorizedError(err: unknown): boolean {
+  if (err instanceof HttpError && err.statusCode === 401) return true;
+  if (err instanceof Error && /HTTP 401|Unauthorized/i.test(err.message)) return true;
+  return false;
 }
 
 // ============================================================================

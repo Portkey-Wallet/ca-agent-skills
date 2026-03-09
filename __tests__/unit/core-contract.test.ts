@@ -33,8 +33,12 @@ beforeEach(() => {
 
 const config = {
   apiUrl: 'https://api',
+  eoaApiUrl: 'https://eoa-api',
   graphqlUrl: 'https://gql',
   network: 'mainnet' as const,
+  eoaFallbackEnabled: true,
+  eoaFallbackRetryCount: 2,
+  eoaFallbackRetryDelayMs: 200,
 };
 
 describe('core/contract', () => {
