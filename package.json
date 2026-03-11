@@ -1,6 +1,6 @@
 {
   "name": "@portkey/ca-agent-skills",
-  "version": "1.1.6",
+  "version": "2.0.0",
   "description": "AI Agent toolkit for Portkey Wallet on the aelf blockchain — Email registration, login, transfers, guardian management, and more.",
   "type": "module",
   "main": "index.ts",
@@ -9,13 +9,14 @@
     "./mcp": "./src/mcp/server.ts"
   },
   "bin": {
-    "portkey-setup": "./bin/setup.js"
+    "portkey-ca-setup": "./bin/setup.js"
   },
   "files": [
     "index.ts",
     "src/",
     "lib/",
     "bin/",
+    "SKILL.md",
     "cli-helpers.ts",
     "portkey_*_skill.ts",
     "openclaw.json",

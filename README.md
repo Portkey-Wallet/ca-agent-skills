@@ -170,14 +170,50 @@ bun run bin/setup.ts openclaw
 # OpenClaw — merge into existing config
 bun run bin/setup.ts openclaw --config-path ./my-openclaw.json
 
-# Check status (Claude, Cursor, OpenClaw)
+# IronClaw — install trusted skill + stdio MCP server
+bun run bin/setup.ts ironclaw
+
+# Check status (Claude, Cursor, OpenClaw, IronClaw)
 bun run bin/setup.ts list
 
 # Remove
 bun run bin/setup.ts uninstall claude
 bun run bin/setup.ts uninstall cursor
 bun run bin/setup.ts uninstall openclaw --config-path ./my-openclaw.json
+bun run bin/setup.ts uninstall ironclaw
 ```
+
+### IronClaw
+
+```bash
+# Install trusted skill + stdio MCP server
+bun run bin/setup.ts ironclaw
+
+# Remove IronClaw integration
+bun run bin/setup.ts uninstall ironclaw
+```
+
+The IronClaw setup does two things by default:
+
+- Writes a stdio MCP server entry to `~/.ironclaw/mcp-servers.json`
+- Copies this repo's `SKILL.md` to `~/.ironclaw/skills/portkey-ca-agent-skills/SKILL.md`
+
+Important trust model note:
+
+- Use the trusted skill path above for write-capable CA wallet operations.
+- Do **not** rely on `~/.ironclaw/installed_skills/` for this package if you need registration, recovery, transfer, guardian management, or other write actions.
+- IronClaw attenuates installed skills to read-only tools, which can make the agent appear to "query only" even though the MCP server is available.
+
+The MCP server exposes destructive annotations for CA write operations so IronClaw can request approval before registration, recovery, transfer, guardian, and contract calls.
+For compatibility, the MCP server currently emits both standard MCP camelCase annotations and IronClaw-compatible snake_case annotations because the current IronClaw source parses snake_case fields for MCP approval hints.
+
+Remote activation contract:
+
+- GitHub repo/tree URLs are discovery sources only, not the final IronClaw install payload.
+- Preferred IronClaw activation from npm: `bunx -p @portkey/ca-agent-skills portkey-ca-setup ironclaw`
+- Prefer ClawHub / managed install for OpenClaw when available; otherwise use `bunx -p @portkey/ca-agent-skills portkey-ca-setup openclaw`
+- Local repo checkout remains a development smoke-test path only.
+- Migration note: `portkey-setup` was removed in `2.0.0`; switch npm-based activation to `portkey-ca-setup`.
 
 ## Usage
 
@@ -290,6 +326,14 @@ bun run test:unit           # Unit tests only
 bun run test:integration    # Integration (requires network)
 bun run test:e2e            # E2E (requires private key)
 ```
+
+### IronClaw Smoke Test
+
+1. Run `bun run bin/setup.ts ironclaw`
+2. Ask a read prompt like `show my guardian list for this Portkey CA wallet`
+3. Ask a local write prompt like `create a new Portkey CA wallet`
+4. Ask a network write prompt like `transfer 1 ELF from my CA wallet`
+5. Confirm CA prompts stay on this skill and EOA wallet-lifecycle prompts do not
 
 ## Security
 
