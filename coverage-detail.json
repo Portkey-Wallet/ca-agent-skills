@@ -3,9 +3,9 @@
   "coverageModel": "bun-text-all-files-by-file-average",
   "byFileAverage": {
     "lines": {
-      "total": 18,
-      "covered": 18,
-      "pct": 87.91253778529921
+      "total": 20,
+      "covered": 20,
+      "pct": 86.02029497359968
     },
     "functions": {
       "total": 0,
@@ -20,9 +20,9 @@
   },
   "weighted": {
     "lines": {
-      "total": 1813,
-      "covered": 1539,
-      "pct": 84.8869277440706
+      "total": 2069,
+      "covered": 1737,
+      "pct": 83.95360077332045
     },
     "functions": {
       "total": 0,
@@ -42,6 +42,42 @@
         "total": 120,
         "covered": 109,
         "pct": 90.83333333333333
+      },
+      "functions": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      },
+      "branches": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      }
+    },
+    {
+      "file": "bin/platforms/ironclaw.ts",
+      "lines": {
+        "total": 167,
+        "covered": 161,
+        "pct": 96.40718562874252
+      },
+      "functions": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      },
+      "branches": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      }
+    },
+    {
+      "file": "bin/platforms/utils.ts",
+      "lines": {
+        "total": 89,
+        "covered": 37,
+        "pct": 41.57303370786517
       },
       "functions": {
         "total": 0,
