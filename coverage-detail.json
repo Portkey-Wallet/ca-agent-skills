@@ -3,9 +3,9 @@
   "coverageModel": "bun-text-all-files-by-file-average",
   "byFileAverage": {
     "lines": {
-      "total": 20,
-      "covered": 20,
-      "pct": 86.02029497359968
+      "total": 19,
+      "covered": 19,
+      "pct": 90.2862100334816
     },
     "functions": {
       "total": 0,
@@ -20,9 +20,9 @@
   },
   "weighted": {
     "lines": {
-      "total": 2069,
-      "covered": 1737,
-      "pct": 83.95360077332045
+      "total": 2065,
+      "covered": 1906,
+      "pct": 92.3002421307506
     },
     "functions": {
       "total": 0,
@@ -109,29 +109,11 @@
       }
     },
     {
-      "file": "lib/aelf-client.ts",
-      "lines": {
-        "total": 185,
-        "covered": 23,
-        "pct": 12.432432432432433
-      },
-      "functions": {
-        "total": 0,
-        "covered": 0,
-        "pct": 0
-      },
-      "branches": {
-        "total": 0,
-        "covered": 0,
-        "pct": 0
-      }
-    },
-    {
       "file": "lib/config.ts",
       "lines": {
-        "total": 74,
-        "covered": 72,
-        "pct": 97.2972972972973
+        "total": 76,
+        "covered": 73,
+        "pct": 96.05263157894737
       },
       "functions": {
         "total": 0,
@@ -201,9 +183,9 @@
     {
       "file": "lib/wallet-context.ts",
       "lines": {
-        "total": 189,
-        "covered": 172,
-        "pct": 91.005291005291
+        "total": 211,
+        "covered": 194,
+        "pct": 91.9431279620853
       },
       "functions": {
         "total": 0,
@@ -219,9 +201,9 @@
     {
       "file": "src/core/account.ts",
       "lines": {
-        "total": 95,
-        "covered": 94,
-        "pct": 98.94736842105263
+        "total": 136,
+        "covered": 135,
+        "pct": 99.26470588235294
       },
       "functions": {
         "total": 0,
@@ -255,9 +237,9 @@
     {
       "file": "src/core/auth.ts",
       "lines": {
-        "total": 238,
-        "covered": 229,
-        "pct": 96.21848739495799
+        "total": 239,
+        "covered": 230,
+        "pct": 96.23430962343096
       },
       "functions": {
         "total": 0,
@@ -327,9 +309,9 @@
     {
       "file": "src/core/keystore.ts",
       "lines": {
-        "total": 276,
-        "covered": 235,
-        "pct": 85.14492753623189
+        "total": 391,
+        "covered": 362,
+        "pct": 92.58312020460357
       },
       "functions": {
         "total": 0,
