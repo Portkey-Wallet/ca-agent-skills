@@ -27,7 +27,7 @@ export function requireWallet(): ReturnType<typeof getWalletByPrivateKey> {
     }
     try {
       const network = active.network || 'mainnet';
-      unlockWallet(password, network, active.loginEmail);
+      unlockWallet(password, network, active.loginEmail, active.keystoreFile);
       const nowUnlocked = getUnlockedWallet();
       if (nowUnlocked) return nowUnlocked.wallet;
     } catch (error) {

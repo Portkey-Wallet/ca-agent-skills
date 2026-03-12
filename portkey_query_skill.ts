@@ -46,7 +46,7 @@ program.command('guardian-list')
 program.command('prepare-auth-flow')
   .description('Prepare register/recovery flow for an email account')
   .requiredOption('--email <email>', 'Email address')
-  .option('--chain-id <chainId>', 'Chain ID', 'AELF')
+  .option('--chain-id <chainId>', 'Chain ID override')
   .action(async (opts) => {
     try {
       const network = (program.opts().network || 'mainnet') as 'mainnet' | 'testnet';

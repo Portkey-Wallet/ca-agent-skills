@@ -105,6 +105,12 @@ export interface SaveKeystoreParams {
   loginEmail?: string;
 }
 
+export interface KeystoreLocatorInput {
+  network: string;
+  loginEmail?: string;
+  keystoreFile?: string;
+}
+
 // ---------------------------------------------------------------------------
 // In-memory state
 // ---------------------------------------------------------------------------
@@ -185,6 +191,13 @@ function readKeystoreMetadata(filePath: string): {
 
 function getRequestedKeystorePath(network: string, loginEmail?: string): string {
   return getKeystorePath(network, loginEmail);
+}
+
+function resolveKeystorePath(locator: KeystoreLocatorInput): string {
+  if (locator.keystoreFile) {
+    return path.resolve(locator.keystoreFile);
+  }
+  return getRequestedKeystorePath(locator.network, locator.loginEmail);
 }
 
 function isSamePath(left?: string, right?: string): boolean {
@@ -328,6 +341,7 @@ export function unlockWallet(
   password: string,
   network: string,
   loginEmail?: string,
+  keystoreFile?: string,
 ): {
   message: string;
   caAddress: string;
@@ -338,11 +352,12 @@ export function unlockWallet(
 } {
   if (!password) throw new Error('password is required');
 
-  const filePath = getRequestedKeystorePath(network, loginEmail);
+  const filePath = resolveKeystorePath({ network, loginEmail, keystoreFile });
   if (!fs.existsSync(filePath)) {
     throw new Error(
       `No keystore found for network "${network}"` +
-      `${loginEmail ? ` and loginEmail "${normalizeLoginEmail(loginEmail)}"` : ''}. ` +
+      `${loginEmail ? ` and loginEmail "${normalizeLoginEmail(loginEmail)}"` : ''}` +
+      `${keystoreFile ? ` at keystoreFile "${path.resolve(keystoreFile)}"` : ''}. ` +
       `Expected at: ${filePath}. Use portkey_save_keystore first.`,
     );
   }
@@ -526,10 +541,11 @@ function readKeystoreProfileSigner(input: SignerContextInput): AelfSigner {
       ),
     );
   }
-  const keystorePath = profile.keystoreFile || getKeystorePath(
-    profile.network || 'mainnet',
-    profile.loginEmail,
-  );
+  const keystorePath = resolveKeystorePath({
+    network: profile.network || 'mainnet',
+    loginEmail: input.loginEmail || profile.loginEmail,
+    keystoreFile: profile.keystoreFile,
+  });
   if (!fs.existsSync(keystorePath)) {
     throw new Error(
       formatSignerError(

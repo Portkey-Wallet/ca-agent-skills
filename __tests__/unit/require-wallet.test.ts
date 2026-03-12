@@ -92,6 +92,34 @@ describe('mcp requireWallet', () => {
     expect(wallet.address).toBe(manager.address);
   });
 
+  test('uses active keystoreFile when loginEmail is absent', () => {
+    const manager = createWallet();
+    const saved = keystore.saveKeystore({
+      password: 'secret',
+      privateKey: manager.privateKey,
+      mnemonic: manager.mnemonic!,
+      caHash: 'hash_ctx_file',
+      caAddress: 'ELF_ca_ctx_file_AELF',
+      loginEmail: 'file@example.com',
+      originChainId: 'AELF',
+      network: 'mainnet',
+    });
+    keystore.lockWallet();
+    keystore.setActiveWallet({
+      walletType: 'CA',
+      source: 'ca-keystore',
+      network: 'mainnet',
+      address: manager.address,
+      caAddress: 'ELF_ca_ctx_file_AELF',
+      caHash: 'hash_ctx_file',
+      keystoreFile: saved.keystorePath,
+    });
+
+    process.env.PORTKEY_CA_KEYSTORE_PASSWORD = 'secret';
+    const wallet = requireWallet();
+    expect(wallet.address).toBe(manager.address);
+  });
+
   test('throws SIGNER_PASSWORD_REQUIRED when active context exists without password', () => {
     const manager = createWallet();
     keystore.saveKeystore({

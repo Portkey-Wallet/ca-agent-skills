@@ -204,6 +204,52 @@ describe('core/keystore', () => {
     expect(secondStatus.caHash).toBe('hash_second_lookup');
   });
 
+  test('unlockWallet can target an explicit keystoreFile without loginEmail', () => {
+    const wallet = createWallet();
+
+    keystore.saveKeystore({
+      password: 'secret',
+      privateKey: wallet.privateKey,
+      mnemonic: wallet.mnemonic!,
+      caHash: 'hash_file_locator',
+      caAddress: 'ELF_ca_file_locator_AELF',
+      loginEmail: 'locator@example.com',
+      originChainId: 'AELF',
+      network: 'mainnet',
+    });
+    keystore.lockWallet();
+
+    const profilePath = keystore.getKeystorePath('mainnet', 'locator@example.com');
+    const unlocked = keystore.unlockWallet('secret', 'mainnet', undefined, profilePath);
+
+    expect(unlocked.caHash).toBe('hash_file_locator');
+    expect(unlocked.managerAddress).toBe(wallet.address);
+  });
+
+  test('getWalletStatus without loginEmail only checks the legacy path', () => {
+    const wallet = createWallet();
+
+    keystore.saveKeystore({
+      password: 'secret',
+      privateKey: wallet.privateKey,
+      mnemonic: wallet.mnemonic!,
+      caHash: 'hash_profile_only',
+      caAddress: 'ELF_ca_profile_only_AELF',
+      loginEmail: 'profile-only@example.com',
+      originChainId: 'AELF',
+      network: 'mainnet',
+    });
+
+    const legacyStatus = keystore.getWalletStatus('mainnet');
+    const targetedStatus = keystore.getWalletStatus('mainnet', 'profile-only@example.com');
+
+    expect(legacyStatus.loginEmail).not.toBe('profile-only@example.com');
+    expect(legacyStatus.caHash).not.toBe('hash_profile_only');
+    expect(targetedStatus.exists).toBe(true);
+    expect(targetedStatus.loginEmail).toBe('profile-only@example.com');
+    expect(targetedStatus.caHash).toBe('hash_profile_only');
+  });
+
   test('createSignerFromCaWallet works with unlocked wallet and env fallback', () => {
     const fallbackPrivateKey = createWallet().privateKey;
     process.env.PORTKEY_PRIVATE_KEY = fallbackPrivateKey;

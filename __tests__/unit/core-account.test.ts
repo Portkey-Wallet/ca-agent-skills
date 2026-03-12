@@ -324,4 +324,35 @@ describe('core/account', () => {
     expect(result.matchedLocalProfile?.loginEmail).toBe('known@example.com');
     expect(result.matchedLocalProfile?.caHash).toBe('local_hash');
   });
+
+  test('prepareAuthFlow uses originChainId when chainId override is omitted', async () => {
+    const httpCalls: string[] = [];
+    coreMockState.httpGetImpl = async (requestPath: string, options?: any) => {
+      httpCalls.push(`${requestPath}:${options?.params?.chainId || ''}`);
+      if (requestPath === '/api/app/account/registerInfo') {
+        return { originChainId: 'tDVV' };
+      }
+      if (requestPath === '/api/app/account/guardianIdentifiers') {
+        expect(options?.params?.chainId).toBe('tDVV');
+        return {
+          guardianList: {
+            guardians: [{ guardianIdentifier: 'tdvv@example.com', type: 'Email' }],
+          },
+          caHash: 'tdvv_hash',
+          caAddress: 'ELF_tdvv_AELF',
+          createChainId: 'tDVV',
+        };
+      }
+      return {};
+    };
+
+    const result = await account.prepareAuthFlow(
+      TEST_CONFIG,
+      { email: 'tdvv@example.com', network: 'mainnet' },
+    );
+
+    expect(result.recommendedFlow).toBe('recovery');
+    expect(result.originChainId).toBe('tDVV');
+    expect(httpCalls).toContain('/api/app/account/guardianIdentifiers:tDVV');
+  });
 });

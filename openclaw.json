@@ -42,7 +42,7 @@
           },
           "chain-id": {
             "type": "string",
-            "description": "Chain ID, default AELF"
+            "description": "Optional chain ID override"
           }
         },
         "required": [
@@ -371,7 +371,7 @@
     },
     {
       "name": "portkey-auth-wallet-status",
-      "description": "Check wallet status (keystore exists, unlocked, CA info)",
+      "description": "Check wallet status for the legacy network keystore path or a targeted loginEmail profile",
       "command": "bun run portkey_auth_skill.ts wallet-status",
       "args": [
         "--login-email"

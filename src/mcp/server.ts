@@ -224,7 +224,7 @@ server.registerTool(
     description: 'Prepare the recommended auth flow for an email account. Use before register/recovery to decide whether the account should register or recover, and to discover CA/guardian context plus matching local keystore profile.',
     inputSchema: {
       email: z.string().email().describe('Email address to prepare auth flow for'),
-      chainId: CHAIN_ID.optional().default('AELF'),
+      chainId: CHAIN_ID.optional(),
       network: NETWORK,
     },
   },
@@ -857,7 +857,7 @@ server.registerTool(
 server.registerTool(
   'portkey_wallet_status',
   {
-    description: 'Check the wallet status: whether a keystore exists, whether it is unlocked, CA address, and manager address. Use at conversation start to determine if portkey_unlock is needed.',
+    description: 'Check the wallet status for the legacy network keystore path or a targeted loginEmail profile: whether a keystore exists, whether it is unlocked, CA address, and manager address. Use portkey_list_wallet_profiles to discover profile keystores.',
     inputSchema: {
       loginEmail: LOGIN_EMAIL.optional(),
       network: NETWORK,
