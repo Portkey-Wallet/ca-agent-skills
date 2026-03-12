@@ -26,7 +26,7 @@
     },
     {
       "name": "portkey-query-guardian-list",
-      "description": "Get guardian list for an account",
+      "description": "Get guardian list for an account on an explicit chain",
       "command": "bun run portkey_query_skill.ts guardian-list",
       "args": [
         "--identifier",
@@ -42,11 +42,39 @@
           },
           "chain-id": {
             "type": "string",
-            "description": "Chain ID, default AELF"
+            "description": "Explicit chain ID"
           }
         },
         "required": [
-          "identifier"
+          "identifier",
+          "chain-id"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "portkey-query-prepare-auth-flow",
+      "description": "Prepare register/recovery flow for an email account and return resolvedChainId",
+      "command": "bun run portkey_query_skill.ts prepare-auth-flow",
+      "args": [
+        "--email",
+        "--chain-id"
+      ],
+      "cwd": ".",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email address"
+          },
+          "chain-id": {
+            "type": "string",
+            "description": "Optional registration chain override for new accounts"
+          }
+        },
+        "required": [
+          "email"
         ],
         "additionalProperties": true
       }
@@ -98,16 +126,23 @@
     },
     {
       "name": "portkey-auth-get-verifier",
-      "description": "Get an assigned verifier server",
-      "command": "sh",
+      "description": "Get an assigned verifier server on an explicit chain",
+      "command": "bun run portkey_auth_skill.ts get-verifier",
       "args": [
-        "-lc",
-        "bun run portkey_auth_skill.ts get-verifier"
+        "--chain-id"
       ],
       "cwd": ".",
       "inputSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "chain-id": {
+            "type": "string",
+            "description": "Resolved chain ID from prepare-auth-flow"
+          }
+        },
+        "required": [
+          "chain-id"
+        ],
         "additionalProperties": true
       }
     },
@@ -139,13 +174,14 @@
           },
           "chain-id": {
             "type": "string",
-            "description": "Chain ID, default AELF"
+            "description": "Resolved chain ID from prepare-auth-flow"
           }
         },
         "required": [
           "email",
           "verifier-id",
-          "operation"
+          "operation",
+          "chain-id"
         ],
         "additionalProperties": true
       }
@@ -188,7 +224,7 @@
           },
           "chain-id": {
             "type": "string",
-            "description": "Chain ID, default AELF"
+            "description": "Resolved chain ID from prepare-auth-flow"
           }
         },
         "required": [
@@ -196,7 +232,8 @@
           "code",
           "verifier-id",
           "session-id",
-          "operation"
+          "operation",
+          "chain-id"
         ],
         "additionalProperties": true
       }
@@ -225,12 +262,46 @@
         "--manager",
         "--verifier-id",
         "--verification-doc",
-        "--signature"
+        "--signature",
+        "--chain-id"
       ],
       "cwd": ".",
       "inputSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email address"
+          },
+          "manager": {
+            "type": "string",
+            "description": "Manager wallet address"
+          },
+          "verifier-id": {
+            "type": "string",
+            "description": "Verifier service ID"
+          },
+          "verification-doc": {
+            "type": "string",
+            "description": "Verification document"
+          },
+          "signature": {
+            "type": "string",
+            "description": "Verifier signature"
+          },
+          "chain-id": {
+            "type": "string",
+            "description": "Resolved chain ID from prepare-auth-flow"
+          }
+        },
+        "required": [
+          "email",
+          "manager",
+          "verifier-id",
+          "verification-doc",
+          "signature",
+          "chain-id"
+        ],
         "additionalProperties": true
       }
     },
@@ -258,12 +329,51 @@
         "--private-key",
         "--mnemonic",
         "--ca-hash",
-        "--ca-address"
+        "--ca-address",
+        "--login-email",
+        "--origin-chain-id"
       ],
       "cwd": ".",
       "inputSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "Password to encrypt the keystore"
+          },
+          "private-key": {
+            "type": "string",
+            "description": "Manager private key"
+          },
+          "mnemonic": {
+            "type": "string",
+            "description": "Manager mnemonic"
+          },
+          "ca-hash": {
+            "type": "string",
+            "description": "CA hash"
+          },
+          "ca-address": {
+            "type": "string",
+            "description": "CA address"
+          },
+          "login-email": {
+            "type": "string",
+            "description": "Login email associated with this CA account"
+          },
+          "origin-chain-id": {
+            "type": "string",
+            "description": "Resolved origin chain ID from prepare-auth-flow"
+          }
+        },
+        "required": [
+          "password",
+          "private-key",
+          "mnemonic",
+          "ca-hash",
+          "ca-address",
+          "origin-chain-id"
+        ],
         "additionalProperties": true
       }
     },
@@ -272,12 +382,25 @@
       "description": "Unlock the encrypted keystore with a password",
       "command": "bun run portkey_auth_skill.ts unlock",
       "args": [
-        "--password"
+        "--password",
+        "--login-email"
       ],
       "cwd": ".",
       "inputSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "Keystore password"
+          },
+          "login-email": {
+            "type": "string",
+            "description": "Login email associated with this CA account"
+          }
+        },
+        "required": [
+          "password"
+        ],
         "additionalProperties": true
       }
     },
@@ -298,11 +421,30 @@
     },
     {
       "name": "portkey-auth-wallet-status",
-      "description": "Check wallet status (keystore exists, unlocked, CA info)",
+      "description": "Check wallet status for the legacy network keystore path or a targeted loginEmail profile",
+      "command": "bun run portkey_auth_skill.ts wallet-status",
+      "args": [
+        "--login-email"
+      ],
+      "cwd": ".",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "login-email": {
+            "type": "string",
+            "description": "Login email associated with this CA account"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "portkey-auth-list-wallet-profiles",
+      "description": "List locally saved CA keystore profiles",
       "command": "sh",
       "args": [
         "-lc",
-        "bun run portkey_auth_skill.ts wallet-status"
+        "bun run portkey_auth_skill.ts list-wallet-profiles"
       ],
       "cwd": ".",
       "inputSchema": {
@@ -449,13 +591,14 @@
           },
           "chain-id": {
             "type": "string",
-            "description": "Chain ID, default AELF"
+            "description": "Resolved chain ID from prepare-auth-flow"
           }
         },
         "required": [
           "email",
           "manager",
-          "guardians-approved"
+          "guardians-approved",
+          "chain-id"
         ],
         "additionalProperties": true
       }
@@ -481,7 +624,7 @@
     },
     {
       "name": "portkey-tx-cross-chain-transfer",
-      "description": "Transfer tokens cross-chain (e.g. AELF to tDVV)",
+      "description": "Transfer tokens cross-chain (e.g. tDVV to AELF)",
       "command": "bun run portkey_tx_skill.ts cross-chain-transfer",
       "args": [
         "--ca-hash",

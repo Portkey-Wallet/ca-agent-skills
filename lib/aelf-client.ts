@@ -90,8 +90,10 @@ export async function callViewMethod<T = unknown>(
   params?: Record<string, unknown>,
 ): Promise<T> {
   // View methods don't require a real identity — use a random ephemeral wallet.
-  // NEVER hard-code a real private key here.
-  const defaultWallet = createWallet();
+  // Rehydrate it via getWalletByPrivateKey so aelf-sdk receives a full wallet
+  // object with keyPair/childWallet metadata for read-only calls.
+  const ephemeral = createWallet();
+  const defaultWallet = getWalletByPrivateKey(ephemeral.privateKey);
   const contract = await getContractInstance(rpcUrl, contractAddress, defaultWallet);
 
   const method = contract[methodName];
@@ -170,6 +172,9 @@ export async function encodeManagerForwardCallParams(
   // Get target contract's protobuf descriptors
   const fds = await instance.chain.getContractFileDescriptorSet(params.contractAddress);
   const root = AElf.pbjs.Root.fromDescriptor(fds, 'proto3');
+  if (typeof root.resolveAll === 'function') {
+    root.resolveAll();
+  }
 
   // Find the method's input type across all services
   let inputType: unknown = null;

@@ -36,7 +36,7 @@ describe('core/assets', () => {
     await expect(
       assets.getTokenBalance(config, {
         caAddress: '',
-        chainId: 'AELF',
+        chainId: 'tDVV',
         symbol: 'ELF',
       } as any),
     ).rejects.toThrow('caAddress is required');
@@ -48,7 +48,7 @@ describe('core/assets', () => {
         return {
           items: [
             {
-              chainId: 'AELF',
+              chainId: 'tDVV',
               endPoint: 'https://rpc',
               caContractAddress: 'CA',
               defaultToken: { address: 'TOKEN', decimals: 8 },
@@ -70,16 +70,16 @@ describe('core/assets', () => {
     };
 
     const withTokenInfo = await assets.getTokenBalance(config, {
-      caAddress: 'ELF_addr_AELF',
-      chainId: 'AELF',
+      caAddress: 'ELF_addr_tDVV',
+      chainId: 'tDVV',
       symbol: 'ELF',
     });
     expect(withTokenInfo.decimals).toBe(6);
 
     tokenInfoFailed = true;
     const fallback = await assets.getTokenBalance(config, {
-      caAddress: 'ELF_addr_AELF',
-      chainId: 'AELF',
+      caAddress: 'ELF_addr_tDVV',
+      chainId: 'tDVV',
       symbol: 'USDT',
     });
     expect(fallback.decimals).toBe(8);
@@ -90,7 +90,7 @@ describe('core/assets', () => {
     coreMockState.httpPostImpl = async () => ({ data: [{ symbol: 'ELF' }] });
 
     const result = await assets.getTokenList(config, {
-      caAddressInfos: [{ chainId: 'AELF', caAddress: 'ELF_addr_AELF' }],
+      caAddressInfos: [{ chainId: 'tDVV', caAddress: 'ELF_addr_tDVV' }],
       skipCount: 1,
       maxResultCount: 2,
     });
@@ -120,7 +120,7 @@ describe('core/assets', () => {
     };
 
     const result = await assets.getTokenList(config, {
-      caAddressInfos: [{ chainId: 'AELF', caAddress: 'ELF_addr_AELF' }],
+      caAddressInfos: [{ chainId: 'tDVV', caAddress: 'ELF_addr_tDVV' }],
       strategy: 'auto',
     });
 
@@ -130,24 +130,24 @@ describe('core/assets', () => {
     expect(tokenCalls.length).toBe(2);
     expect(tokenCalls[0]?.options?.data?.caAddressInfos?.length).toBe(1);
     expect(tokenCalls[1]?.options?.data?.addressInfos?.length).toBe(2);
-    expect(tokenCalls[1]?.options?.data?.addressInfos?.[0]?.address).toBe('ELF_addr_AELF');
+    expect(tokenCalls[1]?.options?.data?.addressInfos?.[0]?.address).toBe('ELF_addr_tDVV');
   });
 
   test('getTokenList supports strategy=eoa and validates strategy', async () => {
-    coreMockState.httpGetImpl = async () => ({ items: [{ chainId: 'AELF' }] });
+    coreMockState.httpGetImpl = async () => ({ items: [{ chainId: 'tDVV' }] });
     coreMockState.httpPostImpl = async () => ({ data: [{ symbol: 'ELF' }], totalRecordCount: 1 });
 
     const result = await assets.getTokenList(config, {
-      caAddressInfos: [{ chainId: 'AELF', caAddress: 'ELF_addr_AELF' }],
+      caAddressInfos: [{ chainId: 'tDVV', caAddress: 'ELF_addr_tDVV' }],
       strategy: 'eoa',
     });
 
     expect(result.dataSource).toBe('eoa-direct');
-    expect(coreMockState.httpCalls[1]?.options?.data?.addressInfos?.[0]?.address).toBe('ELF_addr_AELF');
+    expect(coreMockState.httpCalls[1]?.options?.data?.addressInfos?.[0]?.address).toBe('ELF_addr_tDVV');
 
     await expect(
       assets.getTokenList(config, {
-        caAddressInfos: [{ chainId: 'AELF', caAddress: 'ELF_addr_AELF' }],
+        caAddressInfos: [{ chainId: 'tDVV', caAddress: 'ELF_addr_tDVV' }],
         strategy: 'bad' as any,
       }),
     ).rejects.toThrow('strategy must be one of');
@@ -159,7 +159,7 @@ describe('core/assets', () => {
     };
 
     const params = {
-      caAddressInfos: [{ chainId: 'AELF' as const, caAddress: 'ELF_addr_AELF' }],
+      caAddressInfos: [{ chainId: 'tDVV' as const, caAddress: 'ELF_addr_tDVV' }],
       strategy: 'auto' as const,
     };
 
@@ -198,10 +198,10 @@ describe('core/assets', () => {
       }
       return {};
     };
-    coreMockState.httpGetImpl = async () => ({ items: [{ chainId: 'AELF' }] });
+    coreMockState.httpGetImpl = async () => ({ items: [{ chainId: 'tDVV' }] });
 
     const result = await assets.getTokenList(config, {
-      caAddressInfos: [{ chainId: 'AELF', caAddress: 'ELF_addr_AELF' }],
+      caAddressInfos: [{ chainId: 'tDVV', caAddress: 'ELF_addr_tDVV' }],
       strategy: 'auto',
     });
 
@@ -216,20 +216,20 @@ describe('core/assets', () => {
 
     coreMockState.httpPostImpl = async () => ({ data: [{ symbol: 'COLL' }] });
     const coll = await assets.getNftCollections(config, {
-      caAddressInfos: [{ chainId: 'AELF', caAddress: 'ELF_addr_AELF' }],
+      caAddressInfos: [{ chainId: 'tDVV', caAddress: 'ELF_addr_tDVV' }],
     });
     expect(coll.data.length).toBe(1);
 
     await expect(
       assets.getNftItems(config, {
-        caAddressInfos: [{ chainId: 'AELF', caAddress: 'ELF_addr_AELF' }],
+        caAddressInfos: [{ chainId: 'tDVV', caAddress: 'ELF_addr_tDVV' }],
         symbol: '',
       } as any),
     ).rejects.toThrow('symbol is required');
 
     coreMockState.httpPostImpl = async () => ({ data: [{ tokenId: '1' }] });
     const items = await assets.getNftItems(config, {
-      caAddressInfos: [{ chainId: 'AELF', caAddress: 'ELF_addr_AELF' }],
+      caAddressInfos: [{ chainId: 'tDVV', caAddress: 'ELF_addr_tDVV' }],
       symbol: 'COLL',
     });
     expect(items.data[0]?.tokenId).toBe('1');

@@ -4,7 +4,13 @@ import packageJson from './package.json';
 import { getConfig } from './lib/config.js';
 import { outputSuccess, outputError, safeJsonParse } from './cli-helpers.js';
 import { createWallet } from './lib/aelf-client.js';
-import { saveKeystore, unlockWallet, lockWallet, getWalletStatus } from './src/core/keystore.js';
+import {
+  saveKeystore,
+  unlockWallet,
+  lockWallet,
+  getWalletStatus,
+  listWalletProfiles,
+} from './src/core/keystore.js';
 import {
   getVerifierServer,
   sendVerificationCode,
@@ -17,7 +23,7 @@ import { OperationType } from './lib/types.js';
 
 const program = new Command();
 program.name('portkey-auth').version(packageJson.version).description('Portkey wallet registration & login tools')
-  .option('--network <network>', 'mainnet or testnet', 'mainnet');
+  .option('--network <network>', 'Portkey network (mainnet only)', 'mainnet');
 
 function parseOperationType(operation: string): OperationType {
   const normalized = String(operation || '').toLowerCase().trim();
@@ -29,7 +35,7 @@ function parseOperationType(operation: string): OperationType {
 
 program.command('get-verifier')
   .description('Get an assigned verifier server')
-  .option('--chain-id <chainId>', 'Chain ID', 'AELF')
+  .requiredOption('--chain-id <chainId>', 'Resolved chain ID. Call portkey_query_skill.ts prepare-auth-flow first.')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
@@ -42,7 +48,7 @@ program.command('send-code')
   .requiredOption('--email <email>', 'Email address')
   .requiredOption('--verifier-id <id>', 'Verifier service ID')
   .requiredOption('--operation <type>', 'Operation type: register|recovery')
-  .option('--chain-id <chainId>', 'Chain ID', 'AELF')
+  .requiredOption('--chain-id <chainId>', 'Resolved chain ID. Call portkey_query_skill.ts prepare-auth-flow first.')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
@@ -60,7 +66,7 @@ program.command('verify-code')
   .requiredOption('--verifier-id <id>', 'Verifier service ID')
   .requiredOption('--session-id <id>', 'Verifier session ID')
   .requiredOption('--operation <type>', 'Operation type: register|recovery')
-  .option('--chain-id <chainId>', 'Chain ID', 'AELF')
+  .requiredOption('--chain-id <chainId>', 'Resolved chain ID. Call portkey_query_skill.ts prepare-auth-flow first.')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
@@ -87,7 +93,7 @@ program.command('register')
   .requiredOption('--verifier-id <id>', 'Verifier service ID')
   .requiredOption('--verification-doc <doc>', 'Verification document')
   .requiredOption('--signature <sig>', 'Verifier signature')
-  .option('--chain-id <chainId>', 'Chain ID', 'AELF')
+  .requiredOption('--chain-id <chainId>', 'Resolved chain ID. Call portkey_query_skill.ts prepare-auth-flow first.')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
@@ -104,7 +110,7 @@ program.command('recover')
   .requiredOption('--email <email>', 'Email address')
   .requiredOption('--manager <addr>', 'New manager wallet address')
   .requiredOption('--guardians-approved <json>', 'JSON array of approved guardians')
-  .option('--chain-id <chainId>', 'Chain ID', 'AELF')
+  .requiredOption('--chain-id <chainId>', 'Resolved chain ID. Call portkey_query_skill.ts prepare-auth-flow first.')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
@@ -135,13 +141,16 @@ program.command('save-keystore')
   .requiredOption('--mnemonic <words>', 'Manager mnemonic')
   .requiredOption('--ca-hash <hash>', 'CA hash')
   .requiredOption('--ca-address <addr>', 'CA address')
-  .option('--origin-chain-id <chainId>', 'Origin chain ID', 'AELF')
+  .option('--login-email <email>', 'Login email associated with this CA account')
+  .requiredOption('--origin-chain-id <chainId>', 'Resolved origin chain ID. Call portkey_query_skill.ts prepare-auth-flow first.')
   .action(async (opts) => {
     try {
+      const network = getConfig({ network: program.opts().network }).network;
       outputSuccess(saveKeystore({
         password: opts.password, privateKey: opts.privateKey, mnemonic: opts.mnemonic,
         caHash: opts.caHash, caAddress: opts.caAddress,
-        originChainId: opts.originChainId, network: program.opts().network || 'mainnet',
+        loginEmail: opts.loginEmail,
+        originChainId: opts.originChainId, network,
       }));
     } catch (err: any) { outputError(err.message); }
   });
@@ -149,9 +158,15 @@ program.command('save-keystore')
 program.command('unlock')
   .description('Unlock the encrypted keystore with a password')
   .requiredOption('--password <pwd>', 'Keystore password')
+  .option('--login-email <email>', 'Login email associated with this CA account')
   .action(async (opts) => {
     try {
-      outputSuccess(unlockWallet(opts.password, program.opts().network || 'mainnet'));
+      const network = getConfig({ network: program.opts().network }).network;
+      outputSuccess(unlockWallet(
+        opts.password,
+        network,
+        opts.loginEmail,
+      ));
     } catch (err: any) { outputError(err.message); }
   });
 
@@ -165,9 +180,26 @@ program.command('lock')
 
 program.command('wallet-status')
   .description('Check wallet status (keystore exists, unlocked, CA info)')
+  .option('--login-email <email>', 'Login email associated with this CA account')
+  .action(async (opts) => {
+    try {
+      const network = getConfig({ network: program.opts().network }).network;
+      outputSuccess(getWalletStatus(
+        network,
+        opts.loginEmail,
+      ));
+    } catch (err: any) { outputError(err.message); }
+  });
+
+program.command('list-wallet-profiles')
+  .description('List locally saved CA keystore profiles')
   .action(async () => {
     try {
-      outputSuccess(getWalletStatus(program.opts().network || 'mainnet'));
+      const optionSource = program.getOptionValueSource('network');
+      const network = optionSource === 'default'
+        ? undefined
+        : getConfig({ network: program.opts().network }).network;
+      outputSuccess({ profiles: listWalletProfiles(network) });
     } catch (err: any) { outputError(err.message); }
   });
 

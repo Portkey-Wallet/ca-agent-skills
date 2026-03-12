@@ -12,7 +12,7 @@ import type { ApprovedGuardian, GuardianToAdd, GuardianToRemove } from './lib/ty
 
 const program = new Command();
 program.name('portkey-tx').version(packageJson.version).description('Portkey wallet transaction & guardian tools')
-  .option('--network <network>', 'mainnet or testnet', 'mainnet');
+  .option('--network <network>', 'Portkey network (mainnet only)', 'mainnet');
 
 function requireWallet(): AElfWallet {
   const unlocked = getUnlockedWallet();

@@ -5,10 +5,15 @@ import type {
   GuardianItem,
   VerifierItem,
   HolderInfo,
+  NetworkType,
 } from '../../lib/types.js';
 import { createHttpClient, HttpError } from '../../lib/http.js';
 import { callViewMethod } from '../../lib/aelf-client.js';
 import { SkillError } from './errors.js';
+import {
+  getWalletProfileByLoginEmail,
+  type WalletProfileSummary,
+} from './keystore.js';
 
 const ACCOUNT_NOT_FOUND_ERROR_CODE = '3002';
 
@@ -80,7 +85,7 @@ export interface GetGuardianListParams {
   /** Guardian identifier (email, phone, or social ID) */
   identifier: string;
   /** Chain ID to query guardians from */
-  chainId?: ChainId;
+  chainId: ChainId;
 }
 
 export interface GuardianListItem {
@@ -108,6 +113,24 @@ export interface GetGuardianListResult {
   createChainId?: ChainId;
 }
 
+export interface PrepareAuthFlowParams {
+  email: string;
+  network: NetworkType;
+  chainId?: ChainId;
+}
+
+export interface PrepareAuthFlowResult {
+  email: string;
+  isRegistered: boolean;
+  recommendedFlow: 'register' | 'recovery';
+  originChainId: ChainId | null;
+  resolvedChainId: ChainId;
+  caHash?: string;
+  caAddress?: string;
+  guardians?: GuardianListItem[];
+  matchedLocalProfile?: WalletProfileSummary | null;
+}
+
 /**
  * Get all guardians associated with an account.
  *
@@ -118,6 +141,7 @@ export async function getGuardianList(
   params: GetGuardianListParams,
 ): Promise<GetGuardianListResult> {
   if (!params.identifier) throw new Error('identifier is required');
+  if (!params.chainId) throw new Error('chainId is required');
 
   const http = createHttpClient(config);
 
@@ -130,7 +154,7 @@ export async function getGuardianList(
   }>('/api/app/account/guardianIdentifiers', {
     params: {
       guardianIdentifier: params.identifier,
-      chainId: params.chainId || 'AELF',
+      chainId: params.chainId,
     },
   });
 
@@ -143,6 +167,51 @@ export async function getGuardianList(
     caHash: result.caHash,
     caAddress: result.caAddress,
     createChainId: result.createChainId,
+  };
+}
+
+export async function prepareAuthFlow(
+  config: PortkeyConfig,
+  params: PrepareAuthFlowParams,
+): Promise<PrepareAuthFlowResult> {
+  if (!params.email) throw new SkillError('INVALID_PARAMS', 'email is required');
+  if (!params.network) throw new SkillError('INVALID_PARAMS', 'network is required');
+
+  const matchedLocalProfile = getWalletProfileByLoginEmail(
+    params.network,
+    params.email,
+  );
+  const account = await checkAccount(config, { email: params.email });
+  const resolvedChainId = account.isRegistered
+    ? account.originChainId!
+    : (params.chainId || 'tDVV');
+
+  if (!account.isRegistered) {
+    return {
+      email: params.email,
+      isRegistered: false,
+      recommendedFlow: 'register',
+      originChainId: account.originChainId,
+      resolvedChainId,
+      matchedLocalProfile,
+    };
+  }
+
+  const guardianList = await getGuardianList(config, {
+    identifier: params.email,
+    chainId: resolvedChainId,
+  });
+
+  return {
+    email: params.email,
+    isRegistered: true,
+    recommendedFlow: 'recovery',
+    originChainId: guardianList.createChainId || account.originChainId,
+    resolvedChainId,
+    caHash: guardianList.caHash,
+    caAddress: guardianList.caAddress,
+    guardians: guardianList.guardians,
+    matchedLocalProfile,
   };
 }
 

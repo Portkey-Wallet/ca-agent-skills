@@ -102,7 +102,8 @@ bun run portkey_auth_skill.ts save-keystore \
   --password "your-password" \
   --private-key "hex-key" \
   --mnemonic "word1 word2 ..." \
-  --ca-hash "xxx" --ca-address "ELF_xxx_AELF"
+  --ca-hash "xxx" --ca-address "ELF_xxx_tDVV" \
+  --origin-chain-id "tDVV"
 
 # Unlock
 bun run portkey_auth_skill.ts unlock --password "your-password"
@@ -252,15 +253,19 @@ bun run portkey_query_skill.ts chain-info
 # Create wallet
 bun run portkey_auth_skill.ts create-wallet
 
-# Recovery flow: operation is required (no implicit default)
-bun run portkey_auth_skill.ts send-code --email user@example.com --verifier-id <id> --operation recovery
-bun run portkey_auth_skill.ts verify-code --email user@example.com --code 123456 --verifier-id <id> --session-id <sid> --operation recovery
+# Resolve the correct flow + chain first
+bun run portkey_query_skill.ts prepare-auth-flow --email user@example.com
+
+# Low-level auth tools require explicit chainId from prepare-auth-flow.resolvedChainId
+bun run portkey_auth_skill.ts get-verifier --chain-id <resolvedChainId>
+bun run portkey_auth_skill.ts send-code --email user@example.com --verifier-id <id> --operation recovery --chain-id <resolvedChainId>
+bun run portkey_auth_skill.ts verify-code --email user@example.com --code 123456 --verifier-id <id> --session-id <sid> --operation recovery --chain-id <resolvedChainId>
 
 # Token list strategy: aa | auto | eoa (default: auto)
-bun run portkey_query_skill.ts token-list --ca-address-infos '[{"chainId":"AELF","caAddress":"xxx"}]' --strategy auto
+bun run portkey_query_skill.ts token-list --ca-address-infos '[{"chainId":"tDVV","caAddress":"xxx"}]' --strategy auto
 
 # Transfer tokens (requires PORTKEY_PRIVATE_KEY env)
-bun run portkey_tx_skill.ts transfer --ca-hash xxx --token-contract xxx --symbol ELF --to xxx --amount 100000000 --chain-id AELF
+bun run portkey_tx_skill.ts transfer --ca-hash xxx --token-contract xxx --symbol ELF --to xxx --amount 100000000 --chain-id tDVV
 ```
 
 Recovery proof validation:
@@ -283,7 +288,7 @@ const wallet = createWallet();
 // Get balance
 const balance = await getTokenBalance(config, {
   caAddress: 'xxx',
-  chainId: 'AELF',
+  chainId: 'tDVV',
   symbol: 'ELF',
 });
 ```
@@ -293,7 +298,8 @@ const balance = await getTokenBalance(config, {
 | Network | Chain IDs | AA API URL | EOA API URL |
 |---------|-----------|------------|-------------|
 | mainnet (default) | AELF, tDVV | `https://aa-portkey.portkey.finance` | `https://eoa-portkey.portkey.finance` |
-| testnet | AELF, tDVW | `https://aa-portkey-test.portkey.finance` | `https://eoa-portkey-test.portkey.finance` |
+
+`testnet` has been decommissioned and is no longer supported at runtime.
 
 Asset query strategy (`token-list`):
 - `aa`: query AA endpoint only (`/api/app/user/assets/token`).
@@ -310,7 +316,7 @@ Asset query strategy (`token-list`):
 | `PORTKEY_PRIVATE_KEY` | Fallback | — | Manager wallet private key (fallback if keystore not unlocked) |
 | `PORTKEY_CA_KEYSTORE_PASSWORD` | No | — | Optional password cache for active CA keystore in cross-skill signer resolution |
 | `PORTKEY_SKILL_WALLET_CONTEXT_PATH` | No | `~/.portkey/skill-wallet/context.v1.json` | Override shared wallet context path |
-| `PORTKEY_NETWORK` | No | `mainnet` | `mainnet` or `testnet` |
+| `PORTKEY_NETWORK` | No | `mainnet` | Mainnet only. `testnet` is decommissioned and rejected. |
 | `PORTKEY_API_URL` | No | Per network | Override API endpoint |
 | `PORTKEY_EOA_API_URL` | No | Per network | Override EOA API endpoint used by token-list fallback |
 | `PORTKEY_GRAPHQL_URL` | No | Per network | Override GraphQL endpoint |

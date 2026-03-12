@@ -83,6 +83,7 @@ export {
   getHolderInfo,
   getChainInfo,
   getChainInfoByChainId,
+  prepareAuthFlow,
   clearChainInfoCache,
 } from './src/core/account.js';
 
@@ -135,6 +136,8 @@ export {
   getWalletStatus,
   getUnlockedWallet,
   getKeystorePath,
+  listWalletProfiles,
+  getWalletProfileByLoginEmail,
   clearKeystoreState,
   createSignerFromCaWallet,
   resolveSignerContext,

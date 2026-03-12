@@ -23,7 +23,7 @@ import { withPortkeyRecoveryHint } from '../../lib/error-hints.js';
 // ============================================================================
 
 export interface GetVerifierServerParams {
-  chainId?: ChainId;
+  chainId: ChainId;
 }
 
 /**
@@ -33,12 +33,13 @@ export interface GetVerifierServerParams {
  */
 export async function getVerifierServer(
   config: PortkeyConfig,
-  params?: GetVerifierServerParams,
+  params: GetVerifierServerParams,
 ): Promise<VerifierItem> {
+  if (!params?.chainId) throw new Error('chainId is required');
   const http = createHttpClient(config);
 
   const result = await http.post<VerifierItem>('/api/app/account/getVerifierServer', {
-    data: { chainId: params?.chainId || 'AELF' },
+    data: { chainId: params.chainId },
   });
 
   if (!result?.id) {

@@ -13,14 +13,6 @@ const NETWORK_DEFAULTS: Record<NetworkType, NetworkDefaults> = {
     eoaFallbackRetryCount: 2,
     eoaFallbackRetryDelayMs: 200,
   },
-  testnet: {
-    apiUrl: 'https://aa-portkey-test.portkey.finance',
-    eoaApiUrl: 'https://eoa-portkey-test.portkey.finance',
-    graphqlUrl: 'https://test-indexer-api.aefinder.io/api/app/graphql/portkey',
-    eoaFallbackEnabled: true,
-    eoaFallbackRetryCount: 2,
-    eoaFallbackRetryDelayMs: 200,
-  },
 };
 
 // ---------------------------------------------------------------------------
@@ -37,13 +29,16 @@ const NETWORK_DEFAULTS: Record<NetworkType, NetworkDefaults> = {
  *      PORTKEY_EOA_FALLBACK_ENABLED, PORTKEY_EOA_FALLBACK_RETRY_COUNT, PORTKEY_EOA_FALLBACK_RETRY_DELAY_MS
  *   5. Code defaults (mainnet)
  */
-export function getConfig(override?: Partial<PortkeyConfig> & { network?: NetworkType }): PortkeyConfig {
-  const network: NetworkType =
-    override?.network || (process.env.PORTKEY_NETWORK as NetworkType) || 'mainnet';
+export function getConfig(
+  override?: Omit<Partial<PortkeyConfig>, 'network'> & { network?: NetworkType | string },
+): PortkeyConfig {
+  const network = resolveNetwork(
+    override?.network || process.env.PORTKEY_NETWORK || 'mainnet',
+  );
 
   const defaults = NETWORK_DEFAULTS[network];
   if (!defaults) {
-    throw new Error(`Unknown network: ${network}. Expected "mainnet" or "testnet".`);
+    throw new Error(`Unknown network: ${network}. Expected "mainnet".`);
   }
 
   return {
@@ -72,6 +67,15 @@ export function getConfig(override?: Partial<PortkeyConfig> & { network?: Networ
 }
 
 export { NETWORK_DEFAULTS };
+
+function resolveNetwork(rawNetwork: string): NetworkType {
+  const normalized = String(rawNetwork || '').trim();
+  if (!normalized || normalized === 'mainnet') return 'mainnet';
+  if (normalized === 'testnet') {
+    throw new Error('Network "testnet" has been decommissioned. Use "mainnet" instead.');
+  }
+  throw new Error(`Unknown network: ${normalized}. Expected "mainnet".`);
+}
 
 function parseBooleanEnv(
   overrideValue: boolean | undefined,

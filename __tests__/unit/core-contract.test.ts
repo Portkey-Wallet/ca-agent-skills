@@ -19,7 +19,7 @@ beforeEach(() => {
       return {
         items: [
           {
-            chainId: 'AELF',
+            chainId: 'tDVV',
             endPoint: 'https://rpc',
             caContractAddress: 'CA_CONTRACT',
             defaultToken: { address: 'TOKEN', decimals: 8 },
@@ -95,7 +95,7 @@ describe('core/contract', () => {
       return { caHash: 'hash' };
     };
 
-    const result = await contract.callCaViewMethod(config, 'AELF', 'GetHolderInfo', {
+    const result = await contract.callCaViewMethod(config, 'tDVV', 'GetHolderInfo', {
       caHash: 'hash',
     });
 
@@ -130,7 +130,7 @@ describe('core/contract', () => {
       contractAddress: 'TOKEN',
       methodName: 'Transfer',
       args: { to: 'ELF_to', symbol: 'ELF', amount: '1' },
-      chainId: 'AELF',
+      chainId: 'tDVV',
     });
 
     expect(result.transactionId).toBe('tx-forward');
@@ -152,7 +152,7 @@ describe('core/contract', () => {
       contractAddress: 'TOKEN',
       methodName: 'Transfer',
       args: { to: 'ELF_to', symbol: 'ELF', amount: '1' },
-      chainId: 'AELF',
+      chainId: 'tDVV',
     });
 
     expect(result.transactionId).toBe('tx-key');
@@ -167,7 +167,7 @@ describe('core/contract', () => {
         contractAddress: 'TOKEN',
         methodName: 'Transfer',
         args: {},
-        chainId: 'AELF',
+        chainId: 'tDVV',
       } as any),
     ).rejects.toThrow('caHash is required');
   });

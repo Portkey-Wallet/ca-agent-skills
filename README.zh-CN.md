@@ -95,7 +95,8 @@ bun run portkey_auth_skill.ts save-keystore \
   --password "你的密码" \
   --private-key "hex私钥" \
   --mnemonic "助记词" \
-  --ca-hash "xxx" --ca-address "ELF_xxx_AELF"
+  --ca-hash "xxx" --ca-address "ELF_xxx_tDVV" \
+  --origin-chain-id "tDVV"
 
 # 解锁
 bun run portkey_auth_skill.ts unlock --password "你的密码"
@@ -197,12 +198,16 @@ bun run portkey_query_skill.ts chain-info
 # 创建钱包
 bun run portkey_auth_skill.ts create-wallet
 
-# 恢复流程：operation 必填（不再默认 register）
-bun run portkey_auth_skill.ts send-code --email user@example.com --verifier-id <id> --operation recovery
-bun run portkey_auth_skill.ts verify-code --email user@example.com --code 123456 --verifier-id <id> --session-id <sid> --operation recovery
+# 先解析推荐流程和链
+bun run portkey_query_skill.ts prepare-auth-flow --email user@example.com
+
+# low-level auth 工具必须显式传 prepare-auth-flow 返回的 resolvedChainId
+bun run portkey_auth_skill.ts get-verifier --chain-id <resolvedChainId>
+bun run portkey_auth_skill.ts send-code --email user@example.com --verifier-id <id> --operation recovery --chain-id <resolvedChainId>
+bun run portkey_auth_skill.ts verify-code --email user@example.com --code 123456 --verifier-id <id> --session-id <sid> --operation recovery --chain-id <resolvedChainId>
 
 # Token 列表策略：aa | auto | eoa（默认 auto）
-bun run portkey_query_skill.ts token-list --ca-address-infos '[{"chainId":"AELF","caAddress":"xxx"}]' --strategy auto
+bun run portkey_query_skill.ts token-list --ca-address-infos '[{"chainId":"tDVV","caAddress":"xxx"}]' --strategy auto
 ```
 
 恢复证明校验：
@@ -235,7 +240,7 @@ console.log(wallet.address, wallet.privateKey);
 // 查询余额
 const balance = await getTokenBalance(config, {
   caAddress: 'xxx',
-  chainId: 'AELF',
+  chainId: 'tDVV',
   symbol: 'ELF',
 });
 ```
@@ -244,48 +249,56 @@ const balance = await getTokenBalance(config, {
 
 ```typescript
 import {
-  getConfig, createWallet, getVerifierServer,
+  getConfig, createWallet, prepareAuthFlow, getVerifierServer,
   sendVerificationCode, verifyCode, registerWallet,
   checkRegisterOrRecoveryStatus, OperationType,
 } from '@portkey/ca-agent-skills';
 
 const config = getConfig({ network: 'mainnet' });
 
-// 1. 获取 Verifier
-const verifier = await getVerifierServer(config);
+// 1. 先解析推荐流程和链
+const authFlow = await prepareAuthFlow(config, {
+  email: 'user@example.com',
+  network: 'mainnet',
+});
 
-// 2. 发送验证码（注意：mainnet 已废弃 Register(0)，统一使用 CommunityRecovery(1)）
+// 2. 获取 Verifier
+const verifier = await getVerifierServer(config, {
+  chainId: authFlow.resolvedChainId,
+});
+
+// 3. 发送验证码（注意：mainnet 已废弃 Register(0)，统一使用 CommunityRecovery(1)）
 const { verifierSessionId } = await sendVerificationCode(config, {
   email: 'user@example.com',
   verifierId: verifier.id,
-  chainId: 'AELF',
+  chainId: authFlow.resolvedChainId,
   operationType: OperationType.CreateCAHolder, // 注册用 1，登录用 SocialRecovery(2)
 });
 
-// 3. 用户输入验证码后校验
+// 4. 用户输入验证码后校验
 const { signature, verificationDoc } = await verifyCode(config, {
   email: 'user@example.com',
   verificationCode: '123456',
   verifierId: verifier.id,
   verifierSessionId,
-  chainId: 'AELF',
+  chainId: authFlow.resolvedChainId,
   operationType: OperationType.CreateCAHolder,
 });
 
-// 4. 创建 Manager 钱包
+// 5. 创建 Manager 钱包
 const wallet = createWallet();
 
-// 5. 提交注册
+// 6. 提交注册
 const { sessionId } = await registerWallet(config, {
   email: 'user@example.com',
   manager: wallet.address,
   verifierId: verifier.id,
   verificationDoc,
   signature,
-  chainId: 'AELF',
+  chainId: authFlow.resolvedChainId,
 });
 
-// 6. 轮询状态
+// 7. 轮询状态
 let status;
 do {
   await new Promise(r => setTimeout(r, 3000));
@@ -295,7 +308,7 @@ do {
 console.log('CA Address:', status.caAddress);
 console.log('CA Hash:', status.caHash);
 
-// 7. 保存 keystore（加密持久化 Manager 私钥）
+// 8. 保存 keystore（加密持久化 Manager 私钥）
 import { saveKeystore } from '@portkey/ca-agent-skills';
 saveKeystore({
   password: 'user-chosen-password',
@@ -303,7 +316,7 @@ saveKeystore({
   mnemonic: wallet.mnemonic,
   caHash: status.caHash!,
   caAddress: status.caAddress!,
-  originChainId: 'AELF',
+  originChainId: authFlow.resolvedChainId,
   network: 'mainnet',
 });
 // 钱包已自动解锁，后续写操作无需再设置 PORTKEY_PRIVATE_KEY
@@ -316,7 +329,7 @@ saveKeystore({
 | `PORTKEY_PRIVATE_KEY` | Fallback | — | Manager 钱包私钥（keystore 未解锁时的 fallback） |
 | `PORTKEY_CA_KEYSTORE_PASSWORD` | 否 | — | 跨 skill signer 解析时可选的 keystore 密码缓存 |
 | `PORTKEY_SKILL_WALLET_CONTEXT_PATH` | 否 | `~/.portkey/skill-wallet/context.v1.json` | 覆盖共享 wallet context 路径 |
-| `PORTKEY_NETWORK` | 否 | `mainnet` | `mainnet` 或 `testnet` |
+| `PORTKEY_NETWORK` | 否 | `mainnet` | 仅支持 `mainnet`，传 `testnet` 会直接报错 |
 | `PORTKEY_API_URL` | 否 | 按网络 | 覆盖 API 地址 |
 | `PORTKEY_EOA_API_URL` | 否 | 按网络 | 覆盖 token-list 回退使用的 EOA API 地址 |
 | `PORTKEY_GRAPHQL_URL` | 否 | 按网络 | 覆盖 GraphQL 地址 |

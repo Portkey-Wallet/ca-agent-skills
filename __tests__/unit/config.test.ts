@@ -27,17 +27,13 @@ describe('lib/config', () => {
     expect(config.eoaFallbackRetryDelayMs).toBe(200);
   });
 
-  it('should return testnet config when network override is testnet', () => {
-    const config = getConfig({ network: 'testnet' });
-    expect(config.network).toBe('testnet');
-    expect(config.apiUrl).toBe(NETWORK_DEFAULTS.testnet.apiUrl);
+  it('should reject testnet network override', () => {
+    expect(() => getConfig({ network: 'testnet' })).toThrow('decommissioned');
   });
 
-  it('should respect PORTKEY_NETWORK env variable', () => {
+  it('should reject PORTKEY_NETWORK=testnet', () => {
     process.env.PORTKEY_NETWORK = 'testnet';
-    const config = getConfig();
-    expect(config.network).toBe('testnet');
-    expect(config.apiUrl).toBe(NETWORK_DEFAULTS.testnet.apiUrl);
+    expect(() => getConfig()).toThrow('decommissioned');
   });
 
   it('should prioritize function params over env variables', () => {
@@ -92,8 +88,6 @@ describe('lib/config', () => {
 
   it('should have correct mainnet defaults', () => {
     expect(NETWORK_DEFAULTS.mainnet.apiUrl).toBe('https://aa-portkey.portkey.finance');
-    expect(NETWORK_DEFAULTS.testnet.apiUrl).toBe('https://aa-portkey-test.portkey.finance');
     expect(NETWORK_DEFAULTS.mainnet.eoaApiUrl).toBe('https://eoa-portkey.portkey.finance');
-    expect(NETWORK_DEFAULTS.testnet.eoaApiUrl).toBe('https://eoa-portkey-test.portkey.finance');
   });
 });

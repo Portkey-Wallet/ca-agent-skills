@@ -2,9 +2,9 @@
 // Network & Config
 // ============================================================================
 
-export type NetworkType = 'mainnet' | 'testnet';
+export type NetworkType = 'mainnet';
 
-export type ChainId = 'AELF' | 'tDVV' | 'tDVW';
+export type ChainId = 'AELF' | 'tDVV';
 
 export interface PortkeyConfig {
   /** Portkey backend API base URL */

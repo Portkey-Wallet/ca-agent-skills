@@ -3,7 +3,13 @@ import { Command } from 'commander';
 import packageJson from './package.json';
 import { getConfig } from './lib/config.js';
 import { outputSuccess, outputError, safeJsonParse } from './cli-helpers.js';
-import { checkAccount, getGuardianList, getHolderInfo, getChainInfo } from './src/core/account.js';
+import {
+  checkAccount,
+  getGuardianList,
+  getHolderInfo,
+  getChainInfo,
+  prepareAuthFlow,
+} from './src/core/account.js';
 import { getTokenBalance, getTokenList, getNftCollections, getNftItems, getTokenPrice } from './src/core/assets.js';
 import { callContractViewMethod } from './src/core/contract.js';
 import { getTransactionResult } from './src/core/transfer.js';
@@ -12,7 +18,7 @@ import type { CaAddressInfo, TokenListStrategy } from './lib/types.js';
 
 const program = new Command();
 program.name('portkey-query').version(packageJson.version).description('Portkey wallet query tools')
-  .option('--network <network>', 'mainnet or testnet', 'mainnet');
+  .option('--network <network>', 'Portkey network (mainnet only)', 'mainnet');
 
 // --- Account ---
 
@@ -29,11 +35,26 @@ program.command('check-account')
 program.command('guardian-list')
   .description('Get guardian list for an account')
   .requiredOption('--identifier <id>', 'Guardian identifier')
-  .option('--chain-id <chainId>', 'Chain ID', 'AELF')
+  .requiredOption('--chain-id <chainId>', 'Explicit chain ID. Prefer prepare-auth-flow for account-aware routing.')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
       outputSuccess(await getGuardianList(config, { identifier: opts.identifier, chainId: opts.chainId }));
+    } catch (err: any) { outputError(err.message); }
+  });
+
+program.command('prepare-auth-flow')
+  .description('Prepare register/recovery flow for an email account and resolve the chain to use')
+  .requiredOption('--email <email>', 'Email address')
+  .option('--chain-id <chainId>', 'Optional registration chain override for new accounts')
+  .action(async (opts) => {
+    try {
+      const config = getConfig({ network: program.opts().network });
+      outputSuccess(await prepareAuthFlow(config, {
+        email: opts.email,
+        chainId: opts.chainId,
+        network: config.network,
+      }));
     } catch (err: any) { outputError(err.message); }
   });
 

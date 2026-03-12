@@ -52,8 +52,8 @@ describe('wallet context storage', () => {
       {
         walletType: 'CA',
         source: 'ca-keystore',
-        address: 'ELF_manager_AELF',
-        caAddress: 'ELF_ca_AELF',
+        address: 'ELF_manager_tDVV',
+        caAddress: 'ELF_ca_tDVV',
         caHash: 'hash_1',
         keystoreFile: '/tmp/mainnet.keystore.json',
       },
@@ -64,13 +64,34 @@ describe('wallet context storage', () => {
     expect(readWalletContext()?.profiles.default?.caHash).toBe('hash_1');
   });
 
+  test('CA keystore profiles with loginEmail use stable per-account profile ids', () => {
+    const result = setActiveWalletProfile(
+      {
+        walletType: 'CA',
+        source: 'ca-keystore',
+        network: 'mainnet',
+        loginEmail: 'User+1@Example.com',
+        address: 'ELF_manager_email_tDVV',
+        caAddress: 'ELF_ca_email_tDVV',
+        caHash: 'hash_email',
+        keystoreFile: '/tmp/mainnet/user%40example.com.keystore.json',
+      },
+      writer,
+    );
+
+    expect(result.activeProfileId).toBe('ca:mainnet:user%2B1%40example.com');
+    expect(result.profiles['ca:mainnet:user%2B1%40example.com']?.loginEmail).toBe(
+      'user+1@example.com',
+    );
+  });
+
   test('writes secure file permissions on unix-like platforms', () => {
     setActiveWalletProfile(
       {
         walletType: 'CA',
         source: 'ca-keystore',
-        address: 'ELF_perm_AELF',
-        caAddress: 'ELF_perm_ca_AELF',
+        address: 'ELF_perm_tDVV',
+        caAddress: 'ELF_perm_ca_tDVV',
         caHash: 'hash_perm',
         keystoreFile: '/tmp/mainnet.keystore.json',
       },
@@ -94,8 +115,8 @@ describe('wallet context storage', () => {
         {
           walletType: 'CA',
           source: 'ca-keystore',
-          address: 'ELF_lock_AELF',
-          caAddress: 'ELF_ca_AELF',
+          address: 'ELF_lock_tDVV',
+          caAddress: 'ELF_ca_tDVV',
           caHash: 'hash_lock',
           keystoreFile: '/tmp/mainnet.keystore.json',
         },
@@ -115,8 +136,8 @@ describe('wallet context storage', () => {
       {
         walletType: 'CA',
         source: 'ca-keystore',
-        address: 'ELF_stale_AELF',
-        caAddress: 'ELF_ca_AELF',
+        address: 'ELF_stale_tDVV',
+        caAddress: 'ELF_ca_tDVV',
         caHash: 'hash_stale',
         keystoreFile: '/tmp/mainnet.keystore.json',
       },
@@ -132,8 +153,8 @@ describe('wallet context storage', () => {
       {
         walletType: 'CA',
         source: 'ca-keystore',
-        address: 'ELF_safe_AELF',
-        caAddress: 'ELF_ca_AELF',
+        address: 'ELF_safe_tDVV',
+        caAddress: 'ELF_ca_tDVV',
         caHash: 'hash_safe',
         keystoreFile: '/tmp/mainnet.keystore.json',
       },
@@ -148,8 +169,8 @@ describe('wallet context storage', () => {
       {
         walletType: 'CA',
         source: 'ca-keystore',
-        address: 'ELF_first_AELF',
-        caAddress: 'ELF_ca_first_AELF',
+        address: 'ELF_first_tDVV',
+        caAddress: 'ELF_ca_first_tDVV',
         caHash: 'hash_first',
         keystoreFile: '/tmp/first.keystore.json',
       },
@@ -160,8 +181,8 @@ describe('wallet context storage', () => {
       {
         walletType: 'CA',
         source: 'ca-keystore',
-        address: 'ELF_second_AELF',
-        caAddress: 'ELF_ca_second_AELF',
+        address: 'ELF_second_tDVV',
+        caAddress: 'ELF_ca_second_tDVV',
         caHash: 'hash_second',
         keystoreFile: '/tmp/second.keystore.json',
       },

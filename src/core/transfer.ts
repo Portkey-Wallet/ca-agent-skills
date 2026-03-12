@@ -231,7 +231,7 @@ export async function getTransactionResult(
 /**
  * Convert chain ID string to its numeric representation via base58 decode.
  *
- * 'AELF' → 9992731, 'tDVV' → 1866392, 'tDVW' → 1931928
+ * 'AELF' → 9992731, 'tDVV' → 1866392
  *
  * Uses aelf-sdk's official `chainIdConvertor.base58ToChainId` which:
  *   1. Base58 decodes the string to 3 bytes

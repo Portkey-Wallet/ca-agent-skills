@@ -32,9 +32,13 @@ describe('core/auth', () => {
     expect(coreMockState.httpCalls[0]?.path).toBe('/api/app/account/getVerifierServer');
   });
 
+  test('getVerifierServer requires chainId', async () => {
+    await expect(auth.getVerifierServer(config, {} as any)).rejects.toThrow('chainId is required');
+  });
+
   test('getVerifierServer throws when verifier not returned', async () => {
     coreMockState.httpPostImpl = async () => ({ id: '' });
-    await expect(auth.getVerifierServer(config)).rejects.toThrow('Failed to get verifier server');
+    await expect(auth.getVerifierServer(config, { chainId: 'tDVV' })).rejects.toThrow('Failed to get verifier server');
   });
 
   test('sendVerificationCode validates required params', async () => {
@@ -42,7 +46,7 @@ describe('core/auth', () => {
       auth.sendVerificationCode(config, {
         email: '',
         verifierId: 'v1',
-        chainId: 'AELF',
+        chainId: 'tDVV',
         operationType: 1,
       } as any),
     ).rejects.toThrow('email is required');
@@ -54,7 +58,7 @@ describe('core/auth', () => {
     const result = await auth.sendVerificationCode(config, {
       email: 'u@a.com',
       verifierId: 'v1',
-      chainId: 'AELF',
+      chainId: 'tDVV',
       operationType: 1,
     });
 
@@ -70,7 +74,7 @@ describe('core/auth', () => {
         verificationCode: '123456',
         verifierId: 'v1',
         verifierSessionId: 's1',
-        chainId: 'AELF',
+        chainId: 'tDVV',
         operationType: 1,
       }),
     ).rejects.toThrow('Verification failed');
@@ -84,7 +88,7 @@ describe('core/auth', () => {
       verificationCode: '123456',
       verifierId: 'v1',
       verifierSessionId: 's1',
-      chainId: 'AELF',
+      chainId: 'tDVV',
       operationType: 1,
     });
 
@@ -100,7 +104,7 @@ describe('core/auth', () => {
         verifierId: 'v1',
         verificationDoc: 'doc',
         signature: 'sig',
-        chainId: 'AELF',
+        chainId: 'tDVV',
       } as any),
     ).rejects.toThrow('email is required');
 
@@ -112,7 +116,7 @@ describe('core/auth', () => {
         verifierId: 'v1',
         verificationDoc: 'doc',
         signature: 'sig',
-        chainId: 'AELF',
+        chainId: 'tDVV',
       }),
     ).rejects.toThrow('Registration request failed');
 
@@ -123,7 +127,7 @@ describe('core/auth', () => {
       verifierId: 'v1',
       verificationDoc: 'doc',
       signature: 'sig',
-      chainId: 'AELF',
+      chainId: 'tDVV',
     });
     expect(ok.sessionId).toBe('reg-1');
   });
@@ -134,7 +138,7 @@ describe('core/auth', () => {
         email: 'u@a.com',
         manager: 'mgr',
         guardiansApproved: [],
-        chainId: 'AELF',
+        chainId: 'tDVV',
       } as any),
     ).rejects.toThrow('guardiansApproved is required');
 
@@ -143,13 +147,13 @@ describe('core/auth', () => {
       auth.recoverWallet(config, {
         email: 'u@a.com',
         manager: 'mgr',
-        chainId: 'AELF',
+        chainId: 'tDVV',
         guardiansApproved: [
           {
             type: 0,
             identifier: 'u@a.com',
             verifierId: 'v1',
-            verificationDoc: '0,a,b,c,d,2,9992731',
+            verificationDoc: '0,a,b,c,d,2,1866392',
             signature: 'sig',
           },
         ],
@@ -160,13 +164,13 @@ describe('core/auth', () => {
     const ok = await auth.recoverWallet(config, {
       email: 'u@a.com',
       manager: 'mgr',
-      chainId: 'AELF',
+      chainId: 'tDVV',
       guardiansApproved: [
         {
           type: 0,
           identifier: 'u@a.com',
           verifierId: 'v1',
-          verificationDoc: '0,a,b,c,d,2,9992731',
+          verificationDoc: '0,a,b,c,d,2,1866392',
           signature: 'sig',
         },
       ],
@@ -179,13 +183,13 @@ describe('core/auth', () => {
       auth.recoverWallet(config, {
         email: 'u@a.com',
         manager: 'mgr',
-        chainId: 'AELF',
+        chainId: 'tDVV',
         guardiansApproved: [
           {
             type: 0,
             identifier: '',
             verifierId: 'v1',
-            verificationDoc: '0,a,b,c,d,2,9992731',
+            verificationDoc: '0,a,b,c,d,2,1866392',
             signature: 'sig',
           },
         ] as any,
@@ -202,7 +206,7 @@ describe('core/auth', () => {
             type: 'Email',
             identifier: 'u@a.com',
             verifierId: 'v1',
-            verificationDoc: '0,a,b,c,d,1,9992731',
+            verificationDoc: '0,a,b,c,d,1,1866392',
             signature: 'sig',
           },
         ] as any,
@@ -219,7 +223,7 @@ describe('core/auth', () => {
     expect(pending).toEqual({ status: 'pending' });
 
     coreMockState.httpGetImpl = async () => ({
-      items: [{ registerStatus: 'pass', caAddress: 'ELF_addr_AELF', caHash: 'hash1' }],
+      items: [{ registerStatus: 'pass', caAddress: 'ELF_addr_tDVV', caHash: 'hash1' }],
     });
     const pass = await auth.checkRegisterOrRecoveryStatus(config, {
       sessionId: 's2',

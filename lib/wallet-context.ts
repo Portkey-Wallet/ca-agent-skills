@@ -25,9 +25,10 @@ export type SignerContextInput = {
   address?: string;
   password?: string;
   privateKey?: string;
+  loginEmail?: string;
   caHash?: string;
   caAddress?: string;
-  network?: 'mainnet' | 'testnet';
+  network?: 'mainnet';
 };
 
 export type ActiveWalletProfile = {
@@ -35,6 +36,7 @@ export type ActiveWalletProfile = {
   source: WalletSource;
   network?: string;
   address?: string;
+  loginEmail?: string;
   caAddress?: string;
   caHash?: string;
   walletFile?: string;
@@ -85,6 +87,30 @@ function ensureDir(pathname: string): void {
   }
 }
 
+function normalizeLoginEmail(loginEmail?: string): string | undefined {
+  const normalized = typeof loginEmail === 'string'
+    ? loginEmail.trim().toLowerCase()
+    : '';
+  return normalized || undefined;
+}
+
+function getAutoProfileId(
+  profile: Omit<ActiveWalletProfile, 'updatedAt'> & { profileId?: string },
+): string {
+  if (profile.profileId) return profile.profileId;
+
+  const loginEmail = normalizeLoginEmail(profile.loginEmail);
+  if (
+    profile.walletType === 'CA' &&
+    profile.source === 'ca-keystore' &&
+    loginEmail
+  ) {
+    return `ca:${profile.network || 'mainnet'}:${encodeURIComponent(loginEmail)}`;
+  }
+
+  return DEFAULT_PROFILE_ID;
+}
+
 function parseProfile(value: unknown): ActiveWalletProfile | null {
   if (!value || typeof value !== 'object') return null;
   const record = value as Record<string, unknown>;
@@ -104,6 +130,8 @@ function parseProfile(value: unknown): ActiveWalletProfile | null {
     source: record.source,
     network: typeof record.network === 'string' ? record.network : undefined,
     address: typeof record.address === 'string' ? record.address : undefined,
+    loginEmail:
+      typeof record.loginEmail === 'string' ? record.loginEmail : undefined,
     caAddress: typeof record.caAddress === 'string' ? record.caAddress : undefined,
     caHash: typeof record.caHash === 'string' ? record.caHash : undefined,
     walletFile: typeof record.walletFile === 'string' ? record.walletFile : undefined,
@@ -255,7 +283,8 @@ export function setActiveWalletProfile(
 ): WalletContextFile {
   const filePath = getContextPath();
   return withContextLock(filePath, () => {
-    const profileId = profile.profileId || DEFAULT_PROFILE_ID;
+    const profileId = getAutoProfileId(profile);
+    const loginEmail = normalizeLoginEmail(profile.loginEmail);
     const current =
       readWalletContextFromPath(filePath) ||
       ({
@@ -268,6 +297,7 @@ export function setActiveWalletProfile(
     current.activeProfileId = profileId;
     current.profiles[profileId] = {
       ...profile,
+      loginEmail,
       updatedAt: new Date().toISOString(),
     };
     current.lastWriter = writer;

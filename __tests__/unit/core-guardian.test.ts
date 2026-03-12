@@ -19,7 +19,7 @@ beforeEach(() => {
       return {
         items: [
           {
-            chainId: 'AELF',
+            chainId: 'tDVV',
             endPoint: 'https://rpc',
             caContractAddress: 'CA',
             defaultToken: { address: 'TOKEN', decimals: 8 },
@@ -48,7 +48,7 @@ describe('core/guardian', () => {
     await expect(
       guardian.addGuardian(config, wallet, {
         caHash: '',
-        chainId: 'AELF',
+        chainId: 'tDVV',
         guardianToAdd: {
           identifierHash: 'idhash',
           type: 0,
@@ -79,7 +79,7 @@ describe('core/guardian', () => {
 
     const result = await guardian.addGuardian(config, wallet, {
       caHash: 'hash',
-      chainId: 'AELF',
+      chainId: 'tDVV',
       guardianToAdd: {
         identifierHash: 'idhash',
         type: 0,
@@ -107,7 +107,7 @@ describe('core/guardian', () => {
     await expect(
       guardian.removeGuardian(config, wallet, {
         caHash: '',
-        chainId: 'AELF',
+        chainId: 'tDVV',
         guardianToRemove: {
           identifierHash: 'idhash',
           type: 0,
@@ -132,7 +132,7 @@ describe('core/guardian', () => {
 
     const result = await guardian.removeGuardian(config, wallet, {
       caHash: 'hash',
-      chainId: 'AELF',
+      chainId: 'tDVV',
       guardianToRemove: {
         identifierHash: 'idhash',
         type: 0,
