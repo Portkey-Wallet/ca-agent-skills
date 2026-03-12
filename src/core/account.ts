@@ -5,6 +5,7 @@ import type {
   GuardianItem,
   VerifierItem,
   HolderInfo,
+  NetworkType,
 } from '../../lib/types.js';
 import { createHttpClient, HttpError } from '../../lib/http.js';
 import { callViewMethod } from '../../lib/aelf-client.js';
@@ -84,7 +85,7 @@ export interface GetGuardianListParams {
   /** Guardian identifier (email, phone, or social ID) */
   identifier: string;
   /** Chain ID to query guardians from */
-  chainId?: ChainId;
+  chainId: ChainId;
 }
 
 export interface GuardianListItem {
@@ -114,7 +115,7 @@ export interface GetGuardianListResult {
 
 export interface PrepareAuthFlowParams {
   email: string;
-  network: 'mainnet' | 'testnet';
+  network: NetworkType;
   chainId?: ChainId;
 }
 
@@ -123,6 +124,7 @@ export interface PrepareAuthFlowResult {
   isRegistered: boolean;
   recommendedFlow: 'register' | 'recovery';
   originChainId: ChainId | null;
+  resolvedChainId: ChainId;
   caHash?: string;
   caAddress?: string;
   guardians?: GuardianListItem[];
@@ -139,6 +141,7 @@ export async function getGuardianList(
   params: GetGuardianListParams,
 ): Promise<GetGuardianListResult> {
   if (!params.identifier) throw new Error('identifier is required');
+  if (!params.chainId) throw new Error('chainId is required');
 
   const http = createHttpClient(config);
 
@@ -151,7 +154,7 @@ export async function getGuardianList(
   }>('/api/app/account/guardianIdentifiers', {
     params: {
       guardianIdentifier: params.identifier,
-      chainId: params.chainId || 'AELF',
+      chainId: params.chainId,
     },
   });
 
@@ -179,6 +182,9 @@ export async function prepareAuthFlow(
     params.email,
   );
   const account = await checkAccount(config, { email: params.email });
+  const resolvedChainId = account.isRegistered
+    ? account.originChainId!
+    : (params.chainId || 'tDVV');
 
   if (!account.isRegistered) {
     return {
@@ -186,13 +192,14 @@ export async function prepareAuthFlow(
       isRegistered: false,
       recommendedFlow: 'register',
       originChainId: account.originChainId,
+      resolvedChainId,
       matchedLocalProfile,
     };
   }
 
   const guardianList = await getGuardianList(config, {
     identifier: params.email,
-    chainId: params.chainId || account.originChainId || 'AELF',
+    chainId: resolvedChainId,
   });
 
   return {
@@ -200,6 +207,7 @@ export async function prepareAuthFlow(
     isRegistered: true,
     recommendedFlow: 'recovery',
     originChainId: guardianList.createChainId || account.originChainId,
+    resolvedChainId,
     caHash: guardianList.caHash,
     caAddress: guardianList.caAddress,
     guardians: guardianList.guardians,

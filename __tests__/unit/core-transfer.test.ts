@@ -19,7 +19,7 @@ beforeEach(() => {
       return {
         items: [
           {
-            chainId: 'AELF',
+            chainId: 'tDVV',
             endPoint: 'https://rpc',
             caContractAddress: 'CA',
             defaultToken: { address: 'TOKEN', decimals: 8 },
@@ -52,7 +52,7 @@ describe('core/transfer', () => {
         symbol: 'ELF',
         to: 'ELF_to',
         amount: '1',
-        chainId: 'AELF',
+        chainId: 'tDVV',
       } as any),
     ).rejects.toThrow('caHash is required');
 
@@ -72,7 +72,7 @@ describe('core/transfer', () => {
       symbol: 'ELF',
       to: 'ELF_to',
       amount: '1',
-      chainId: 'AELF',
+      chainId: 'tDVV',
       memo: 'memo',
     });
 
@@ -99,8 +99,8 @@ describe('core/transfer', () => {
         symbol: 'ELF',
         to: 'ELF_to',
         amount: '1',
-        chainId: 'AELF',
-        toChainId: 'tDVV',
+        chainId: 'tDVV',
+        toChainId: 'AELF',
       }),
     ).rejects.toThrow('Cross-chain step 1 failed');
   });
@@ -125,8 +125,8 @@ describe('core/transfer', () => {
         symbol: 'ELF',
         to: 'ELF_to',
         amount: '100',
-        chainId: 'AELF',
-        toChainId: 'tDVV',
+        chainId: 'tDVV',
+        toChainId: 'AELF',
       }),
     ).rejects.toThrow('RECOVERY NEEDED');
   });
@@ -151,9 +151,9 @@ describe('core/transfer', () => {
       symbol: 'ELF',
       to: 'ELF_to',
       amount: '100',
-      chainId: 'AELF',
-      toChainId: 'tDVV',
-      issueChainId: 9992731,
+      chainId: 'tDVV',
+      toChainId: 'AELF',
+      issueChainId: 1866392,
     });
 
     expect(result.transactionId).toBe('step2');
@@ -162,7 +162,7 @@ describe('core/transfer', () => {
   test('recoverStuckTransfer sends token back to CA', async () => {
     coreMockState.callSendMethodImpl = async (_rpc: string, _contract: string, _wallet: any, method: string, payload: any) => {
       expect(method).toBe('Transfer');
-      expect(payload.to).toBe('ELF_ca_AELF');
+      expect(payload.to).toBe('ELF_ca_tDVV');
       return { transactionId: 'recover-tx', data: { Status: 'MINED' } };
     };
 
@@ -170,8 +170,8 @@ describe('core/transfer', () => {
       tokenContractAddress: 'TOKEN',
       symbol: 'ELF',
       amount: '100',
-      caAddress: 'ELF_ca_AELF',
-      chainId: 'AELF',
+      caAddress: 'ELF_ca_tDVV',
+      chainId: 'tDVV',
     });
 
     expect(result).toEqual({ transactionId: 'recover-tx', status: 'MINED' });
@@ -179,7 +179,7 @@ describe('core/transfer', () => {
 
   test('getTransactionResult validates params and queries tx result', async () => {
     await expect(
-      transfer.getTransactionResult(config, { txId: '', chainId: 'AELF' } as any),
+      transfer.getTransactionResult(config, { txId: '', chainId: 'tDVV' } as any),
     ).rejects.toThrow('txId is required');
 
     coreMockState.getTxResultImpl = async (_rpc: string, txId: string) => {
@@ -189,7 +189,7 @@ describe('core/transfer', () => {
 
     const result = await transfer.getTransactionResult(config, {
       txId: 'abc123',
-      chainId: 'AELF',
+      chainId: 'tDVV',
     });
 
     expect((result as any).Status).toBe('MINED');

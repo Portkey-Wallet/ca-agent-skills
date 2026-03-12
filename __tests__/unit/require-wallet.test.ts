@@ -57,8 +57,8 @@ describe('mcp requireWallet', () => {
       privateKey: manager.privateKey,
       mnemonic: manager.mnemonic!,
       caHash: 'hash_unlock',
-      caAddress: 'ELF_ca_unlock_AELF',
-      originChainId: 'AELF',
+      caAddress: 'ELF_ca_unlock_tDVV',
+      originChainId: 'tDVV',
       network: 'mainnet',
     });
 
@@ -80,9 +80,9 @@ describe('mcp requireWallet', () => {
       privateKey: manager.privateKey,
       mnemonic: manager.mnemonic!,
       caHash: 'hash_ctx',
-      caAddress: 'ELF_ca_ctx_AELF',
+      caAddress: 'ELF_ca_ctx_tDVV',
       loginEmail: 'ctx@example.com',
-      originChainId: 'AELF',
+      originChainId: 'tDVV',
       network: 'mainnet',
     });
     keystore.lockWallet();
@@ -99,9 +99,9 @@ describe('mcp requireWallet', () => {
       privateKey: manager.privateKey,
       mnemonic: manager.mnemonic!,
       caHash: 'hash_ctx_file',
-      caAddress: 'ELF_ca_ctx_file_AELF',
+      caAddress: 'ELF_ca_ctx_file_tDVV',
       loginEmail: 'file@example.com',
-      originChainId: 'AELF',
+      originChainId: 'tDVV',
       network: 'mainnet',
     });
     keystore.lockWallet();
@@ -110,7 +110,7 @@ describe('mcp requireWallet', () => {
       source: 'ca-keystore',
       network: 'mainnet',
       address: manager.address,
-      caAddress: 'ELF_ca_ctx_file_AELF',
+      caAddress: 'ELF_ca_ctx_file_tDVV',
       caHash: 'hash_ctx_file',
       keystoreFile: saved.keystorePath,
     });
@@ -127,8 +127,8 @@ describe('mcp requireWallet', () => {
       privateKey: manager.privateKey,
       mnemonic: manager.mnemonic!,
       caHash: 'hash_need_password',
-      caAddress: 'ELF_ca_need_password_AELF',
-      originChainId: 'AELF',
+      caAddress: 'ELF_ca_need_password_tDVV',
+      originChainId: 'tDVV',
       network: 'mainnet',
     });
     keystore.lockWallet();

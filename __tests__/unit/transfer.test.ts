@@ -16,13 +16,9 @@ describe('chainIdToNum (base58 chain ID conversion)', () => {
     expect(base58ToChainId('tDVV')).toBe(1866392);
   });
 
-  test('tDVW → 1931928', () => {
-    expect(base58ToChainId('tDVW')).toBe(1931928);
-  });
-
   test('roundtrip: chainIdToBase58(base58ToChainId(x)) === x', () => {
     const { chainIdToBase58 } = AElf.utils.chainIdConvertor;
-    for (const id of ['AELF', 'tDVV', 'tDVW']) {
+    for (const id of ['AELF', 'tDVV']) {
       expect(chainIdToBase58(base58ToChainId(id))).toBe(id);
     }
   });

@@ -59,8 +59,8 @@ describe('core/keystore', () => {
         privateKey: 'pk',
         mnemonic: 'm',
         caHash: 'hash',
-        caAddress: 'ELF_ca_AELF',
-        originChainId: 'AELF',
+        caAddress: 'ELF_ca_tDVV',
+        originChainId: 'tDVV',
         network: 'mainnet',
       } as any),
     ).toThrow('password is required');
@@ -74,25 +74,25 @@ describe('core/keystore', () => {
       privateKey: wallet.privateKey,
       mnemonic: wallet.mnemonic!,
       caHash: 'hash',
-      caAddress: 'ELF_ca_AELF',
-      originChainId: 'AELF',
+      caAddress: 'ELF_ca_tDVV',
+      originChainId: 'tDVV',
       network: 'mainnet',
     });
 
-    expect(result.caAddress).toBe('ELF_ca_AELF');
+    expect(result.caAddress).toBe('ELF_ca_tDVV');
     expect(result.managerAddress).toBe(wallet.address);
 
     const status = keystore.getWalletStatus('mainnet');
     expect(status.exists).toBe(true);
     expect(status.unlocked).toBe(true);
     expect(status.caHash).toBe('hash');
-    expect(status.caAddress).toBe('ELF_ca_AELF');
+    expect(status.caAddress).toBe('ELF_ca_tDVV');
 
     const active = keystore.getActiveWallet();
     expect(active?.walletType).toBe('CA');
     expect(active?.source).toBe('ca-keystore');
     expect(active?.caHash).toBe('hash');
-    expect(active?.caAddress).toBe('ELF_ca_AELF');
+    expect(active?.caAddress).toBe('ELF_ca_tDVV');
   });
 
   test('saveKeystore with loginEmail writes profile-specific keystore without overwriting others', () => {
@@ -104,9 +104,9 @@ describe('core/keystore', () => {
       privateKey: first.privateKey,
       mnemonic: first.mnemonic!,
       caHash: 'hash_first_email',
-      caAddress: 'ELF_ca_first_email_AELF',
+      caAddress: 'ELF_ca_first_email_tDVV',
       loginEmail: 'first@example.com',
-      originChainId: 'AELF',
+      originChainId: 'tDVV',
       network: 'mainnet',
     });
     const secondResult = keystore.saveKeystore({
@@ -114,9 +114,9 @@ describe('core/keystore', () => {
       privateKey: second.privateKey,
       mnemonic: second.mnemonic!,
       caHash: 'hash_second_email',
-      caAddress: 'ELF_ca_second_email_AELF',
+      caAddress: 'ELF_ca_second_email_tDVV',
       loginEmail: 'second@example.com',
-      originChainId: 'AELF',
+      originChainId: 'tDVV',
       network: 'mainnet',
     });
 
@@ -147,8 +147,8 @@ describe('core/keystore', () => {
       privateKey: wallet.privateKey,
       mnemonic: wallet.mnemonic!,
       caHash: 'hash2',
-      caAddress: 'ELF_ca2_AELF',
-      originChainId: 'AELF',
+      caAddress: 'ELF_ca2_tDVV',
+      originChainId: 'tDVV',
       network: 'mainnet',
     });
 
@@ -157,7 +157,7 @@ describe('core/keystore', () => {
 
     const unlocked = keystore.unlockWallet('secret', 'mainnet');
     expect(unlocked.caHash).toBe('hash2');
-    expect(unlocked.caAddress).toBe('ELF_ca2_AELF');
+    expect(unlocked.caAddress).toBe('ELF_ca2_tDVV');
 
     expect(keystore.getUnlockedWallet()).not.toBeNull();
     keystore.lockWallet();
@@ -173,9 +173,9 @@ describe('core/keystore', () => {
       privateKey: first.privateKey,
       mnemonic: first.mnemonic!,
       caHash: 'hash_first_lookup',
-      caAddress: 'ELF_ca_first_lookup_AELF',
+      caAddress: 'ELF_ca_first_lookup_tDVV',
       loginEmail: 'first@example.com',
-      originChainId: 'AELF',
+      originChainId: 'tDVV',
       network: 'mainnet',
     });
     keystore.saveKeystore({
@@ -183,9 +183,9 @@ describe('core/keystore', () => {
       privateKey: second.privateKey,
       mnemonic: second.mnemonic!,
       caHash: 'hash_second_lookup',
-      caAddress: 'ELF_ca_second_lookup_AELF',
+      caAddress: 'ELF_ca_second_lookup_tDVV',
       loginEmail: 'second@example.com',
-      originChainId: 'AELF',
+      originChainId: 'tDVV',
       network: 'mainnet',
     });
 
@@ -212,9 +212,9 @@ describe('core/keystore', () => {
       privateKey: wallet.privateKey,
       mnemonic: wallet.mnemonic!,
       caHash: 'hash_file_locator',
-      caAddress: 'ELF_ca_file_locator_AELF',
+      caAddress: 'ELF_ca_file_locator_tDVV',
       loginEmail: 'locator@example.com',
-      originChainId: 'AELF',
+      originChainId: 'tDVV',
       network: 'mainnet',
     });
     keystore.lockWallet();
@@ -234,9 +234,9 @@ describe('core/keystore', () => {
       privateKey: wallet.privateKey,
       mnemonic: wallet.mnemonic!,
       caHash: 'hash_profile_only',
-      caAddress: 'ELF_ca_profile_only_AELF',
+      caAddress: 'ELF_ca_profile_only_tDVV',
       loginEmail: 'profile-only@example.com',
-      originChainId: 'AELF',
+      originChainId: 'tDVV',
       network: 'mainnet',
     });
 
@@ -254,7 +254,7 @@ describe('core/keystore', () => {
     const fallbackPrivateKey = createWallet().privateKey;
     process.env.PORTKEY_PRIVATE_KEY = fallbackPrivateKey;
     process.env.PORTKEY_CA_HASH = 'env_hash';
-    process.env.PORTKEY_CA_ADDRESS = 'ELF_env_AELF';
+    process.env.PORTKEY_CA_ADDRESS = 'ELF_env_tDVV';
 
     const fallbackSigner = keystore.createSignerFromCaWallet();
     expect(fallbackSigner).toBeTruthy();
@@ -265,8 +265,8 @@ describe('core/keystore', () => {
       privateKey: wallet.privateKey,
       mnemonic: wallet.mnemonic!,
       caHash: 'hash3',
-      caAddress: 'ELF_ca3_AELF',
-      originChainId: 'AELF',
+      caAddress: 'ELF_ca3_tDVV',
+      originChainId: 'tDVV',
       network: 'mainnet',
     });
 
@@ -279,11 +279,11 @@ describe('core/keystore', () => {
   });
 
   test('getWalletStatus tolerates malformed keystore file', () => {
-    const malformedPath = keystore.getKeystorePath('testnet');
+    const malformedPath = keystore.getKeystorePath('mainnet');
     fs.mkdirSync(path.dirname(malformedPath), { recursive: true });
     fs.writeFileSync(malformedPath, 'not-json');
 
-    const status = keystore.getWalletStatus('testnet');
+    const status = keystore.getWalletStatus('mainnet');
     expect(status.exists).toBe(true);
     expect(status.caAddress).toBeNull();
     expect(status.caHash).toBeNull();
@@ -297,9 +297,9 @@ describe('core/keystore', () => {
       privateKey: wallet.privateKey,
       mnemonic: wallet.mnemonic!,
       caHash: 'hash_ctx',
-      caAddress: 'ELF_ctx_AELF',
+      caAddress: 'ELF_ctx_tDVV',
       loginEmail: 'ctx@example.com',
-      originChainId: 'AELF',
+      originChainId: 'tDVV',
       network: 'mainnet',
     });
     keystore.lockWallet();
@@ -307,7 +307,7 @@ describe('core/keystore', () => {
     process.env.PORTKEY_CA_KEYSTORE_PASSWORD = 'secret';
     const resolved = keystore.resolveSignerContext({ signerMode: 'context' });
     expect(resolved.provider).toBe('context');
-    expect(resolved.signer.address).toBe('ELF_ctx_AELF');
+    expect(resolved.signer.address).toBe('ELF_ctx_tDVV');
     delete process.env.PORTKEY_CA_KEYSTORE_PASSWORD;
   });
 
@@ -320,7 +320,7 @@ describe('core/keystore', () => {
   test('resolveSignerContext auto mode falls back to env when context is missing', () => {
     process.env.PORTKEY_PRIVATE_KEY = createWallet().privateKey;
     process.env.PORTKEY_CA_HASH = 'env_hash_auto';
-    process.env.PORTKEY_CA_ADDRESS = 'ELF_env_auto_AELF';
+    process.env.PORTKEY_CA_ADDRESS = 'ELF_env_auto_tDVV';
     const resolved = keystore.resolveSignerContext({ signerMode: 'auto' });
     expect(resolved.provider).toBe('env');
     delete process.env.PORTKEY_PRIVATE_KEY;
@@ -335,8 +335,8 @@ describe('core/keystore', () => {
       privateKey: wallet.privateKey,
       mnemonic: wallet.mnemonic!,
       caHash: 'hash_need_pwd',
-      caAddress: 'ELF_need_pwd_AELF',
-      originChainId: 'AELF',
+      caAddress: 'ELF_need_pwd_tDVV',
+      originChainId: 'tDVV',
       network: 'mainnet',
     });
     keystore.lockWallet();
@@ -358,8 +358,8 @@ describe('core/keystore', () => {
       privateKey: wallet.privateKey,
       mnemonic: wallet.mnemonic!,
       caHash: 'hash_legacy',
-      caAddress: 'ELF_ca_legacy_AELF',
-      originChainId: 'AELF',
+      caAddress: 'ELF_ca_legacy_tDVV',
+      originChainId: 'tDVV',
       network: 'mainnet',
     });
     keystore.lockWallet();

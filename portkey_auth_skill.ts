@@ -23,7 +23,7 @@ import { OperationType } from './lib/types.js';
 
 const program = new Command();
 program.name('portkey-auth').version(packageJson.version).description('Portkey wallet registration & login tools')
-  .option('--network <network>', 'mainnet or testnet', 'mainnet');
+  .option('--network <network>', 'Portkey network (mainnet only)', 'mainnet');
 
 function parseOperationType(operation: string): OperationType {
   const normalized = String(operation || '').toLowerCase().trim();
@@ -35,7 +35,7 @@ function parseOperationType(operation: string): OperationType {
 
 program.command('get-verifier')
   .description('Get an assigned verifier server')
-  .option('--chain-id <chainId>', 'Chain ID', 'AELF')
+  .requiredOption('--chain-id <chainId>', 'Resolved chain ID. Call portkey_query_skill.ts prepare-auth-flow first.')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
@@ -48,7 +48,7 @@ program.command('send-code')
   .requiredOption('--email <email>', 'Email address')
   .requiredOption('--verifier-id <id>', 'Verifier service ID')
   .requiredOption('--operation <type>', 'Operation type: register|recovery')
-  .option('--chain-id <chainId>', 'Chain ID', 'AELF')
+  .requiredOption('--chain-id <chainId>', 'Resolved chain ID. Call portkey_query_skill.ts prepare-auth-flow first.')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
@@ -66,7 +66,7 @@ program.command('verify-code')
   .requiredOption('--verifier-id <id>', 'Verifier service ID')
   .requiredOption('--session-id <id>', 'Verifier session ID')
   .requiredOption('--operation <type>', 'Operation type: register|recovery')
-  .option('--chain-id <chainId>', 'Chain ID', 'AELF')
+  .requiredOption('--chain-id <chainId>', 'Resolved chain ID. Call portkey_query_skill.ts prepare-auth-flow first.')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
@@ -93,7 +93,7 @@ program.command('register')
   .requiredOption('--verifier-id <id>', 'Verifier service ID')
   .requiredOption('--verification-doc <doc>', 'Verification document')
   .requiredOption('--signature <sig>', 'Verifier signature')
-  .option('--chain-id <chainId>', 'Chain ID', 'AELF')
+  .requiredOption('--chain-id <chainId>', 'Resolved chain ID. Call portkey_query_skill.ts prepare-auth-flow first.')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
@@ -110,7 +110,7 @@ program.command('recover')
   .requiredOption('--email <email>', 'Email address')
   .requiredOption('--manager <addr>', 'New manager wallet address')
   .requiredOption('--guardians-approved <json>', 'JSON array of approved guardians')
-  .option('--chain-id <chainId>', 'Chain ID', 'AELF')
+  .requiredOption('--chain-id <chainId>', 'Resolved chain ID. Call portkey_query_skill.ts prepare-auth-flow first.')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
@@ -142,14 +142,15 @@ program.command('save-keystore')
   .requiredOption('--ca-hash <hash>', 'CA hash')
   .requiredOption('--ca-address <addr>', 'CA address')
   .option('--login-email <email>', 'Login email associated with this CA account')
-  .option('--origin-chain-id <chainId>', 'Origin chain ID', 'AELF')
+  .requiredOption('--origin-chain-id <chainId>', 'Resolved origin chain ID. Call portkey_query_skill.ts prepare-auth-flow first.')
   .action(async (opts) => {
     try {
+      const network = getConfig({ network: program.opts().network }).network;
       outputSuccess(saveKeystore({
         password: opts.password, privateKey: opts.privateKey, mnemonic: opts.mnemonic,
         caHash: opts.caHash, caAddress: opts.caAddress,
         loginEmail: opts.loginEmail,
-        originChainId: opts.originChainId, network: program.opts().network || 'mainnet',
+        originChainId: opts.originChainId, network,
       }));
     } catch (err: any) { outputError(err.message); }
   });
@@ -160,9 +161,10 @@ program.command('unlock')
   .option('--login-email <email>', 'Login email associated with this CA account')
   .action(async (opts) => {
     try {
+      const network = getConfig({ network: program.opts().network }).network;
       outputSuccess(unlockWallet(
         opts.password,
-        program.opts().network || 'mainnet',
+        network,
         opts.loginEmail,
       ));
     } catch (err: any) { outputError(err.message); }
@@ -181,8 +183,9 @@ program.command('wallet-status')
   .option('--login-email <email>', 'Login email associated with this CA account')
   .action(async (opts) => {
     try {
+      const network = getConfig({ network: program.opts().network }).network;
       outputSuccess(getWalletStatus(
-        program.opts().network || 'mainnet',
+        network,
         opts.loginEmail,
       ));
     } catch (err: any) { outputError(err.message); }
@@ -195,7 +198,7 @@ program.command('list-wallet-profiles')
       const optionSource = program.getOptionValueSource('network');
       const network = optionSource === 'default'
         ? undefined
-        : program.opts().network;
+        : getConfig({ network: program.opts().network }).network;
       outputSuccess({ profiles: listWalletProfiles(network) });
     } catch (err: any) { outputError(err.message); }
   });

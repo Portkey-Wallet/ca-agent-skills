@@ -22,7 +22,7 @@ const EXACT_SCHEMA_EXPECTATIONS: Record<string, { properties: string[]; required
   },
   'portkey-query-guardian-list': {
     properties: ['identifier', 'chain-id'],
-    required: ['identifier'],
+    required: ['identifier', 'chain-id'],
   },
   'portkey-query-prepare-auth-flow': {
     properties: ['email', 'chain-id'],
@@ -30,15 +30,15 @@ const EXACT_SCHEMA_EXPECTATIONS: Record<string, { properties: string[]; required
   },
   'portkey-auth-send-code': {
     properties: ['email', 'verifier-id', 'operation', 'chain-id'],
-    required: ['email', 'verifier-id', 'operation'],
+    required: ['email', 'verifier-id', 'operation', 'chain-id'],
   },
   'portkey-auth-verify-code': {
     properties: ['email', 'code', 'verifier-id', 'session-id', 'operation', 'chain-id'],
-    required: ['email', 'code', 'verifier-id', 'session-id', 'operation'],
+    required: ['email', 'code', 'verifier-id', 'session-id', 'operation', 'chain-id'],
   },
   'portkey-auth-recover': {
     properties: ['email', 'manager', 'guardians-approved', 'chain-id'],
-    required: ['email', 'manager', 'guardians-approved'],
+    required: ['email', 'manager', 'guardians-approved', 'chain-id'],
   },
   'portkey-query-token-list': {
     properties: ['ca-address-infos', 'strategy'],

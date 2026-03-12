@@ -18,7 +18,7 @@ import type { CaAddressInfo, TokenListStrategy } from './lib/types.js';
 
 const program = new Command();
 program.name('portkey-query').version(packageJson.version).description('Portkey wallet query tools')
-  .option('--network <network>', 'mainnet or testnet', 'mainnet');
+  .option('--network <network>', 'Portkey network (mainnet only)', 'mainnet');
 
 // --- Account ---
 
@@ -35,7 +35,7 @@ program.command('check-account')
 program.command('guardian-list')
   .description('Get guardian list for an account')
   .requiredOption('--identifier <id>', 'Guardian identifier')
-  .option('--chain-id <chainId>', 'Chain ID', 'AELF')
+  .requiredOption('--chain-id <chainId>', 'Explicit chain ID. Prefer prepare-auth-flow for account-aware routing.')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
@@ -44,17 +44,16 @@ program.command('guardian-list')
   });
 
 program.command('prepare-auth-flow')
-  .description('Prepare register/recovery flow for an email account')
+  .description('Prepare register/recovery flow for an email account and resolve the chain to use')
   .requiredOption('--email <email>', 'Email address')
-  .option('--chain-id <chainId>', 'Chain ID override')
+  .option('--chain-id <chainId>', 'Optional registration chain override for new accounts')
   .action(async (opts) => {
     try {
-      const network = (program.opts().network || 'mainnet') as 'mainnet' | 'testnet';
-      const config = getConfig({ network });
+      const config = getConfig({ network: program.opts().network });
       outputSuccess(await prepareAuthFlow(config, {
         email: opts.email,
         chainId: opts.chainId,
-        network,
+        network: config.network,
       }));
     } catch (err: any) { outputError(err.message); }
   });

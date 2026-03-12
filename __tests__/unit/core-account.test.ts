@@ -67,14 +67,14 @@ const TEST_CONFIG = {
 
 describe('core/account', () => {
   test('checkAccount returns registered when originChainId exists', async () => {
-    coreMockState.httpGetImpl = async () => ({ originChainId: 'AELF' });
+    coreMockState.httpGetImpl = async () => ({ originChainId: 'tDVV' });
 
     const result = await account.checkAccount(
       TEST_CONFIG,
       { email: 'a@b.com' },
     );
 
-    expect(result).toEqual({ isRegistered: true, originChainId: 'AELF' });
+    expect(result).toEqual({ isRegistered: true, originChainId: 'tDVV' });
     expect(coreMockState.httpCalls[0]?.path).toBe('/api/app/account/registerInfo');
   });
 
@@ -132,18 +132,25 @@ describe('core/account', () => {
     coreMockState.httpGetImpl = async () => ({
       guardianList: { guardians: [{ guardianIdentifier: 'a@b.com', type: 'Email' }] },
       caHash: 'hash',
-      caAddress: 'ELF_abc_AELF',
-      createChainId: 'AELF',
+      caAddress: 'ELF_abc_tDVV',
+      createChainId: 'tDVV',
     });
 
     const result = await account.getGuardianList(
       TEST_CONFIG,
-      { identifier: 'a@b.com' },
+      { identifier: 'a@b.com', chainId: 'tDVV' },
     );
 
     expect(result.guardians.length).toBe(1);
     expect(result.caHash).toBe('hash');
-    expect(result.createChainId).toBe('AELF');
+    expect(result.createChainId).toBe('tDVV');
+    expect(coreMockState.httpCalls[0]?.options?.params?.chainId).toBe('tDVV');
+  });
+
+  test('getGuardianList requires chainId', async () => {
+    await expect(
+      account.getGuardianList(TEST_CONFIG, { identifier: 'missing-chain' } as any),
+    ).rejects.toThrow('chainId is required');
   });
 
   test('getGuardianList supports guardianAccounts legacy format', async () => {
@@ -271,11 +278,12 @@ describe('core/account', () => {
 
     const result = await account.prepareAuthFlow(
       TEST_CONFIG,
-      { email: 'new@example.com', network: 'mainnet', chainId: 'AELF' },
+      { email: 'new@example.com', network: 'mainnet' },
     );
 
     expect(result.isRegistered).toBe(false);
     expect(result.recommendedFlow).toBe('register');
+    expect(result.resolvedChainId).toBe('tDVV');
     expect(result.guardians).toBeUndefined();
     expect(result.matchedLocalProfile).toBeNull();
   });
@@ -287,16 +295,16 @@ describe('core/account', () => {
       privateKey: wallet.privateKey,
       mnemonic: wallet.mnemonic!,
       caHash: 'local_hash',
-      caAddress: 'ELF_local_AELF',
+      caAddress: 'ELF_local_tDVV',
       loginEmail: 'known@example.com',
-      originChainId: 'AELF',
+      originChainId: 'tDVV',
       network: 'mainnet',
     });
     keystore.lockWallet();
 
     coreMockState.httpGetImpl = async (requestPath: string) => {
       if (requestPath === '/api/app/account/registerInfo') {
-        return { originChainId: 'AELF' };
+        return { originChainId: 'tDVV' };
       }
       if (requestPath === '/api/app/account/guardianIdentifiers') {
         return {
@@ -304,8 +312,8 @@ describe('core/account', () => {
             guardians: [{ guardianIdentifier: 'known@example.com', type: 'Email' }],
           },
           caHash: 'chain_hash',
-          caAddress: 'ELF_chain_AELF',
-          createChainId: 'AELF',
+          caAddress: 'ELF_chain_tDVV',
+          createChainId: 'tDVV',
         };
       }
       return {};
@@ -313,13 +321,14 @@ describe('core/account', () => {
 
     const result = await account.prepareAuthFlow(
       TEST_CONFIG,
-      { email: 'known@example.com', network: 'mainnet', chainId: 'AELF' },
+      { email: 'known@example.com', network: 'mainnet' },
     );
 
     expect(result.isRegistered).toBe(true);
     expect(result.recommendedFlow).toBe('recovery');
+    expect(result.resolvedChainId).toBe('tDVV');
     expect(result.caHash).toBe('chain_hash');
-    expect(result.caAddress).toBe('ELF_chain_AELF');
+    expect(result.caAddress).toBe('ELF_chain_tDVV');
     expect(result.guardians?.length).toBe(1);
     expect(result.matchedLocalProfile?.loginEmail).toBe('known@example.com');
     expect(result.matchedLocalProfile?.caHash).toBe('local_hash');
@@ -339,7 +348,7 @@ describe('core/account', () => {
             guardians: [{ guardianIdentifier: 'tdvv@example.com', type: 'Email' }],
           },
           caHash: 'tdvv_hash',
-          caAddress: 'ELF_tdvv_AELF',
+          caAddress: 'ELF_tdvv_tDVV',
           createChainId: 'tDVV',
         };
       }
@@ -353,6 +362,22 @@ describe('core/account', () => {
 
     expect(result.recommendedFlow).toBe('recovery');
     expect(result.originChainId).toBe('tDVV');
+    expect(result.resolvedChainId).toBe('tDVV');
     expect(httpCalls).toContain('/api/app/account/guardianIdentifiers:tDVV');
+  });
+
+  test('prepareAuthFlow keeps explicit registration override for new accounts', async () => {
+    coreMockState.httpGetImpl = async () => {
+      throw new MockHttpError(404, 'Not Found', JSON.stringify({ code: '3002' }));
+    };
+
+    const result = await account.prepareAuthFlow(
+      TEST_CONFIG,
+      { email: 'new-aelf@example.com', network: 'mainnet', chainId: 'AELF' },
+    );
+
+    expect(result.isRegistered).toBe(false);
+    expect(result.recommendedFlow).toBe('register');
+    expect(result.resolvedChainId).toBe('AELF');
   });
 });

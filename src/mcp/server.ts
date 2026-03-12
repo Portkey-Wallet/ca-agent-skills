@@ -47,8 +47,8 @@ const server = new McpServer({
 // Helpers
 // ---------------------------------------------------------------------------
 
-const CHAIN_ID = z.enum(['AELF', 'tDVV', 'tDVW']).describe('aelf chain ID');
-const NETWORK = z.enum(['mainnet', 'testnet']).default('mainnet').describe('Portkey network');
+const CHAIN_ID = z.enum(['AELF', 'tDVV']).describe('aelf chain ID');
+const NETWORK = z.literal('mainnet').default('mainnet').describe('Portkey network (mainnet only)');
 const LOGIN_EMAIL = z.string().email().describe('Login email associated with the CA account');
 const JSON_PREVIEW_MAX_CHARS = 200;
 
@@ -221,7 +221,7 @@ server.registerTool(
 server.registerTool(
   'portkey_prepare_auth_flow',
   {
-    description: 'Prepare the recommended auth flow for an email account. Use before register/recovery to decide whether the account should register or recover, and to discover CA/guardian context plus matching local keystore profile.',
+    description: 'Prepare the recommended auth flow for an email account. Use this before register/recovery to discover recommendedFlow and resolvedChainId. Existing accounts stay on originChainId; new accounts default to tDVV unless an explicit override is provided.',
     inputSchema: {
       email: z.string().email().describe('Email address to prepare auth flow for'),
       chainId: CHAIN_ID.optional(),
@@ -230,11 +230,11 @@ server.registerTool(
   },
   async ({ email, chainId, network }) => {
     try {
-      const resolvedNetwork = (network || 'mainnet') as 'mainnet' | 'testnet';
-      return ok(await prepareAuthFlow(getConfig({ network: resolvedNetwork }), {
+      const config = getConfig({ network });
+      return ok(await prepareAuthFlow(config, {
         email,
         chainId,
-        network: resolvedNetwork,
+        network: config.network,
       }));
     } catch (err) { return fail(err); }
   },
@@ -246,10 +246,10 @@ server.registerTool(
 server.registerTool(
   'portkey_get_guardian_list',
   {
-    description: 'Get all guardians associated with an account. Use when you need to see which guardians protect a wallet, or to prepare for login/recovery. Returns array of guardians with their types, verifiers, and login status.',
+    description: 'Get all guardians associated with an account on an explicit chain. Prefer portkey_prepare_auth_flow when the chain is not already known.',
     inputSchema: {
       identifier: z.string().describe('Guardian identifier (email, phone, or social user ID)'),
-      chainId: CHAIN_ID.optional().default('AELF'),
+      chainId: CHAIN_ID.describe('Explicit chain ID for the guardian query'),
       network: NETWORK,
     },
   },
@@ -304,11 +304,11 @@ server.registerTool(
 server.registerTool(
   'portkey_send_code',
   {
-    description: 'Send a verification code to an email address. Use as the first step in registration or login. Requires a verifierId from portkey_get_verifier. operationType is required and has no default. Returns verifierSessionId needed for portkey_verify_code.',
+    description: 'Send a verification code to an email address. Requires an explicit resolved chainId. Call portkey_prepare_auth_flow first, then pass resolvedChainId here.',
     inputSchema: {
       email: z.string().email().describe('Email address to send code to'),
       verifierId: z.string().describe('Verifier service ID from portkey_get_verifier'),
-      chainId: CHAIN_ID.default('AELF'),
+      chainId: CHAIN_ID.describe('Resolved chain ID from portkey_prepare_auth_flow'),
       operationType: z.enum(['register', 'recovery', 'addGuardian', 'deleteGuardian']).describe('Operation requiring verification'),
       network: NETWORK,
     },
@@ -328,13 +328,13 @@ server.registerTool(
 server.registerTool(
   'portkey_verify_code',
   {
-    description: 'Verify a 6-digit code sent to an email. Use after portkey_send_code to complete verification. operationType is required and has no default. Returns signature and verificationDoc needed for registration or recovery.',
+    description: 'Verify a 6-digit code sent to an email. Requires an explicit resolved chainId from portkey_prepare_auth_flow. Returns signature and verificationDoc needed for registration or recovery.',
     inputSchema: {
       email: z.string().email().describe('Email address the code was sent to'),
       verificationCode: z.string().length(6).describe('6-digit verification code'),
       verifierId: z.string().describe('Verifier service ID'),
       verifierSessionId: z.string().describe('Session ID from portkey_send_code'),
-      chainId: CHAIN_ID.default('AELF'),
+      chainId: CHAIN_ID.describe('Resolved chain ID from portkey_prepare_auth_flow'),
       operationType: z.enum(['register', 'recovery', 'addGuardian', 'deleteGuardian']).describe('Operation type'),
       network: NETWORK,
     },
@@ -359,9 +359,9 @@ server.registerTool(
 server.registerTool(
   'portkey_get_verifier',
   {
-    description: 'Get an assigned verifier server for verification operations. Use before sending a verification code. Returns verifier id, name, and imageUrl.',
+    description: 'Get an assigned verifier server for verification operations on an explicit chain. Call portkey_prepare_auth_flow first and pass resolvedChainId here.',
     inputSchema: {
-      chainId: CHAIN_ID.optional().default('AELF'),
+      chainId: CHAIN_ID.describe('Resolved chain ID from portkey_prepare_auth_flow'),
       network: NETWORK,
     },
   },
@@ -378,14 +378,14 @@ server.registerTool(
 server.registerTool(
   'portkey_register',
   {
-    description: 'Register a new Portkey CA wallet with email. Use after completing email verification (portkey_verify_code). Requires a manager address from a newly created wallet. Returns sessionId to poll with portkey_check_status.',
+    description: 'Register a new Portkey CA wallet with email. Requires an explicit resolved chainId. Call portkey_prepare_auth_flow first, then pass resolvedChainId here.',
     inputSchema: {
       email: z.string().email().describe('Email address'),
       manager: z.string().describe('Manager wallet address (from createWallet)'),
       verifierId: z.string().describe('Verifier service ID'),
       verificationDoc: z.string().describe('Verification document from portkey_verify_code'),
       signature: z.string().describe('Signature from portkey_verify_code'),
-      chainId: CHAIN_ID.default('AELF'),
+      chainId: CHAIN_ID.describe('Resolved chain ID from portkey_prepare_auth_flow'),
       network: NETWORK,
     },
   },
@@ -404,12 +404,12 @@ server.registerTool(
 server.registerTool(
   'portkey_recover',
   {
-    description: 'Recover (login to) an existing Portkey CA wallet. Use after getting enough guardian approvals. Requires guardian verification signatures. Returns sessionId to poll with portkey_check_status.',
+    description: 'Recover (login to) an existing Portkey CA wallet. Requires an explicit resolved chainId. Call portkey_prepare_auth_flow first, then pass resolvedChainId here.',
     inputSchema: {
       email: z.string().email().describe('Email address'),
       manager: z.string().describe('New manager wallet address'),
       guardiansApproved: z.string().describe('JSON string of approved guardians array: [{ identifier, type, verifierId, verificationDoc, signature }]'),
-      chainId: CHAIN_ID.default('AELF'),
+      chainId: CHAIN_ID.describe('Resolved chain ID from portkey_prepare_auth_flow'),
       network: NETWORK,
     },
   },
@@ -579,7 +579,7 @@ server.registerTool(
 server.registerTool(
   'portkey_cross_chain_transfer',
   {
-    description: 'Transfer tokens across chains (e.g., AELF to tDVV). Two-step process handled automatically. Requires manager private key. Returns transactionId and status.',
+    description: 'Transfer tokens across chains (e.g., tDVV to AELF). Two-step process handled automatically. Requires manager private key. Returns transactionId and status.',
     inputSchema: {
       caHash: z.string().describe('CA hash of the sender wallet'),
       tokenContractAddress: z.string().describe('Token contract address on source chain'),
@@ -788,7 +788,7 @@ server.registerTool(
 server.registerTool(
   'portkey_save_keystore',
   {
-    description: 'Encrypt and save the Manager wallet to a keystore file (~/.portkey/ca/). Use after registration or recovery is complete. The wallet is auto-unlocked after saving. The user must provide or confirm a password.',
+    description: 'Encrypt and save the Manager wallet to a keystore file (~/.portkey/ca/). Requires an explicit originChainId from portkey_prepare_auth_flow or a completed auth flow result.',
     inputSchema: {
       password: z.string().min(1).describe('Password to encrypt the keystore'),
       privateKey: z.string().describe('Manager private key (hex, from portkey_create_wallet)'),
@@ -796,7 +796,7 @@ server.registerTool(
       caHash: z.string().describe('CA hash (from portkey_check_status)'),
       caAddress: z.string().describe('CA address (from portkey_check_status)'),
       loginEmail: LOGIN_EMAIL.optional(),
-      originChainId: CHAIN_ID.default('AELF').describe('Origin chain ID where CA was created'),
+      originChainId: CHAIN_ID.describe('Resolved origin chain ID from portkey_prepare_auth_flow'),
       network: NETWORK,
     },
   },

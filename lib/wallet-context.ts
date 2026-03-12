@@ -28,7 +28,7 @@ export type SignerContextInput = {
   loginEmail?: string;
   caHash?: string;
   caAddress?: string;
-  network?: 'mainnet' | 'testnet';
+  network?: 'mainnet';
 };
 
 export type ActiveWalletProfile = {
