@@ -1,91 +1,54 @@
-import { beforeAll, describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
+import { spawnSync } from 'node:child_process';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-type MockResolvedType = {
-  fromObject: (obj: unknown) => unknown;
-  encode: (msg: unknown) => { finish: () => Uint8Array };
+type EncodeCheckResult = {
+  resolvedRequestTypeSet: boolean;
+  encodedArgs: number[];
 };
 
-const resolvedType: MockResolvedType = {
-  fromObject: (obj: unknown) => obj,
-  encode: () => ({ finish: () => new Uint8Array([1, 2, 3]) }),
-};
+function runEncodeCheck(): EncodeCheckResult {
+  const testDir = path.dirname(fileURLToPath(import.meta.url));
+  const helperPath = path.join(testDir, 'helpers', 'aelf-client-encode-check.ts');
+  const repoRoot = path.resolve(testDir, '..', '..');
+  const result = spawnSync(process.execPath, [helperPath], {
+    cwd: repoRoot,
+    env: process.env,
+    encoding: 'utf8',
+  });
 
-const methodRecord: { requestType: string; resolvedRequestType?: MockResolvedType } = {
-  requestType: '.aelf.Hash',
-};
+  if (result.status !== 0) {
+    throw new Error(
+      [
+        `Isolated aelf-client encode check failed with exit code ${result.status ?? 'unknown'}.`,
+        result.stderr?.trim(),
+        result.stdout?.trim(),
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    );
+  }
 
-const root = {
-  nestedArray: [
-    {
-      name: 'RewardClaimContract',
-      methods: {
-        ClaimByPortkeyToCa: methodRecord,
-      },
-    },
-  ],
-  resolveAll() {
-    methodRecord.resolvedRequestType = resolvedType;
-    return this;
-  },
-};
+  const lines = (result.stdout ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const payload = lines.at(-1);
 
-class MockAElf {
-  chain = {
-    getContractFileDescriptorSet: async () => ({ mocked: true }),
-  };
+  if (!payload) {
+    throw new Error('Isolated aelf-client encode check did not emit JSON output.');
+  }
 
-  currentProvider = { host: 'https://rpc.example' };
-
-  static providers = {
-    HttpProvider: class {
-      constructor(_host: string, _timeout?: number) {}
-    },
-  };
-
-  static wallet = {
-    createNewWallet: () => ({
-      address: 'ELF_mock_wallet',
-      privateKey: 'a'.repeat(64),
-      mnemonic: 'm1 m2 m3 m4 m5 m6 m7 m8 m9 m10 m11 m12',
-    }),
-    getWalletByPrivateKey: (privateKey: string) => ({
-      address: 'ELF_mock_wallet',
-      privateKey,
-    }),
-  };
-
-  static pbjs = {
-    Root: {
-      fromDescriptor: () => root,
-    },
-  };
-
-  static utils = {};
-
-  constructor(_provider: unknown) {}
+  return JSON.parse(payload) as EncodeCheckResult;
 }
 
-let encodeManagerForwardCallParams: typeof import('../../lib/aelf-client.js').encodeManagerForwardCallParams;
-
-beforeAll(async () => {
-  mock.module('aelf-sdk', () => ({
-    default: MockAElf,
-  }));
-
-  const realModulePath = '../../lib/aelf-client.js?encode-manager-forward-call';
-  ({ encodeManagerForwardCallParams } = await import(realModulePath));
-});
-
 describe('lib/aelf-client encodeManagerForwardCallParams', () => {
-  it('resolves descriptor methods before reading resolvedRequestType', async () => {
-    const result = await encodeManagerForwardCallParams('https://rpc.example', {
-      caHash: 'hash',
-      contractAddress: 'reward',
-      methodName: 'ClaimByPortkeyToCa',
-      args: { value: Buffer.from('11'.repeat(32), 'hex') },
-    });
+  // Run in a subprocess because Bun module mocks leak across the full unit suite.
+  it('resolves descriptor methods before reading resolvedRequestType', () => {
+    const result = runEncodeCheck();
 
-    expect(methodRecord.resolvedRequestType).toBe(resolvedType);
-    expect(result.args).toEqual(new Uint8Array([1, 2, 3]));
+    expect(result.resolvedRequestTypeSet).toBe(true);
+    expect(result.encodedArgs).toEqual([1, 2, 3]);
   });
 });

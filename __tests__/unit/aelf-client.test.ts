@@ -1,65 +1,66 @@
-import { beforeAll, describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
+import { spawnSync } from 'node:child_process';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-let createWallet: typeof import('../../lib/aelf-client.js').createWallet;
-let getWalletByPrivateKey: typeof import('../../lib/aelf-client.js').getWalletByPrivateKey;
-let clearCaches: typeof import('../../lib/aelf-client.js').clearCaches;
+type AelfClientCheckResult = {
+  walletAddress: string;
+  walletPrivateKeyLength: number;
+  mnemonicWordCount: number;
+  uniqueAddresses: boolean;
+  uniquePrivateKeys: boolean;
+  restoredMatches: boolean;
+  shortKeyAddressDefined: boolean;
+  clearCachesOk: boolean;
+};
 
-beforeAll(async () => {
-  // Load the real module instance even when other tests mock '../../lib/aelf-client.js'.
-  const realModulePath = '../../lib/aelf-client.js?real';
-  const real = await import(realModulePath);
-  createWallet = real.createWallet;
-  getWalletByPrivateKey = real.getWalletByPrivateKey;
-  clearCaches = real.clearCaches;
-});
+function runAelfClientCheck(): AelfClientCheckResult {
+  const testDir = path.dirname(fileURLToPath(import.meta.url));
+  const helperPath = path.join(testDir, 'helpers', 'aelf-client-real-check.ts');
+  const repoRoot = path.resolve(testDir, '..', '..');
+  const result = spawnSync(process.execPath, [helperPath], {
+    cwd: repoRoot,
+    env: process.env,
+    encoding: 'utf8',
+  });
+
+  if (result.status !== 0) {
+    throw new Error(
+      [
+        `Isolated aelf-client check failed with exit code ${result.status ?? 'unknown'}.`,
+        result.stderr?.trim(),
+        result.stdout?.trim(),
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    );
+  }
+
+  const lines = (result.stdout ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const payload = lines.at(-1);
+
+  if (!payload) {
+    throw new Error('Isolated aelf-client check did not emit JSON output.');
+  }
+
+  return JSON.parse(payload) as AelfClientCheckResult;
+}
 
 describe('lib/aelf-client', () => {
-  describe('createWallet', () => {
-    it('should create a new wallet with address and privateKey', () => {
-      const wallet = createWallet();
-      expect(wallet.address).toBeDefined();
-      expect(typeof wallet.address).toBe('string');
-      expect(wallet.address.length).toBeGreaterThan(0);
-      expect(wallet.privateKey).toBeDefined();
-      expect(typeof wallet.privateKey).toBe('string');
-      expect(wallet.privateKey.length).toBe(64); // hex string, 32 bytes
-    });
+  // Run in a subprocess because Bun module mocks leak across the full unit suite.
+  it('validates wallet helpers with the real module implementation', () => {
+    const result = runAelfClientCheck();
 
-    it('should create wallets with unique addresses', () => {
-      const w1 = createWallet();
-      const w2 = createWallet();
-      expect(w1.address).not.toBe(w2.address);
-      expect(w1.privateKey).not.toBe(w2.privateKey);
-    });
-
-    it('should include mnemonic', () => {
-      const wallet = createWallet();
-      expect(wallet.mnemonic).toBeDefined();
-      expect(typeof wallet.mnemonic).toBe('string');
-      // BIP39 mnemonic is 12 words
-      const words = wallet.mnemonic!.split(' ');
-      expect(words.length).toBe(12);
-    });
-  });
-
-  describe('getWalletByPrivateKey', () => {
-    it('should restore a wallet from private key', () => {
-      const original = createWallet();
-      const restored = getWalletByPrivateKey(original.privateKey);
-      expect(restored.address).toBe(original.address);
-      expect(restored.privateKey).toBe(original.privateKey);
-    });
-
-    it('should return a wallet even with short key (aelf-sdk pads it)', () => {
-      // aelf-sdk does not throw on short keys — it zero-pads them
-      const wallet = getWalletByPrivateKey('abc123');
-      expect(wallet.address).toBeDefined();
-    });
-  });
-
-  describe('clearCaches', () => {
-    it('should not throw', () => {
-      expect(() => clearCaches()).not.toThrow();
-    });
+    expect(result.walletAddress).toBeDefined();
+    expect(result.walletPrivateKeyLength).toBe(64);
+    expect(result.mnemonicWordCount).toBe(12);
+    expect(result.uniqueAddresses).toBe(true);
+    expect(result.uniquePrivateKeys).toBe(true);
+    expect(result.restoredMatches).toBe(true);
+    expect(result.shortKeyAddressDefined).toBe(true);
+    expect(result.clearCachesOk).toBe(true);
   });
 });
