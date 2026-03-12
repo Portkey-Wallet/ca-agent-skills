@@ -11,7 +11,13 @@ import { fail } from './error.js';
 import { requireWallet } from './require-wallet.js';
 
 // Core functions
-import { checkAccount, getGuardianList, getHolderInfo, getChainInfo } from '../core/account.js';
+import {
+  checkAccount,
+  getGuardianList,
+  getHolderInfo,
+  getChainInfo,
+  prepareAuthFlow,
+} from '../core/account.js';
 import { getTokenBalance, getTokenList, getNftCollections, getNftItems, getTokenPrice } from '../core/assets.js';
 import { getVerifierServer, sendVerificationCode, verifyCode, registerWallet, recoverWallet, checkRegisterOrRecoveryStatus } from '../core/auth.js';
 import { sameChainTransfer, crossChainTransfer, recoverStuckTransfer, getTransactionResult } from '../core/transfer.js';
@@ -24,6 +30,7 @@ import {
   getWalletStatus,
   getActiveWallet,
   setActiveWallet,
+  listWalletProfiles,
 } from '../core/keystore.js';
 import { SkillError } from '../core/errors.js';
 
@@ -42,6 +49,7 @@ const server = new McpServer({
 
 const CHAIN_ID = z.enum(['AELF', 'tDVV', 'tDVW']).describe('aelf chain ID');
 const NETWORK = z.enum(['mainnet', 'testnet']).default('mainnet').describe('Portkey network');
+const LOGIN_EMAIL = z.string().email().describe('Login email associated with the CA account');
 const JSON_PREVIEW_MAX_CHARS = 200;
 
 function ok(data: unknown) {
@@ -81,6 +89,7 @@ const READ_ONLY_TOOLS = new Set([
   'portkey_get_guardian_list',
   'portkey_get_holder_info',
   'portkey_get_chain_info',
+  'portkey_prepare_auth_flow',
   'portkey_get_verifier',
   'portkey_check_status',
   'portkey_balance',
@@ -91,6 +100,7 @@ const READ_ONLY_TOOLS = new Set([
   'portkey_tx_result',
   'portkey_view_call',
   'portkey_wallet_status',
+  'portkey_list_wallet_profiles',
   'portkey_get_active_wallet',
 ]);
 
@@ -206,7 +216,32 @@ server.registerTool(
 );
 
 // ---------------------------------------------------------------------------
-// 2. portkey_get_guardian_list
+// 2. portkey_prepare_auth_flow
+// ---------------------------------------------------------------------------
+server.registerTool(
+  'portkey_prepare_auth_flow',
+  {
+    description: 'Prepare the recommended auth flow for an email account. Use before register/recovery to decide whether the account should register or recover, and to discover CA/guardian context plus matching local keystore profile.',
+    inputSchema: {
+      email: z.string().email().describe('Email address to prepare auth flow for'),
+      chainId: CHAIN_ID.optional().default('AELF'),
+      network: NETWORK,
+    },
+  },
+  async ({ email, chainId, network }) => {
+    try {
+      const resolvedNetwork = (network || 'mainnet') as 'mainnet' | 'testnet';
+      return ok(await prepareAuthFlow(getConfig({ network: resolvedNetwork }), {
+        email,
+        chainId,
+        network: resolvedNetwork,
+      }));
+    } catch (err) { return fail(err); }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 3. portkey_get_guardian_list
 // ---------------------------------------------------------------------------
 server.registerTool(
   'portkey_get_guardian_list',
@@ -226,7 +261,7 @@ server.registerTool(
 );
 
 // ---------------------------------------------------------------------------
-// 3. portkey_get_holder_info
+// 4. portkey_get_holder_info
 // ---------------------------------------------------------------------------
 server.registerTool(
   'portkey_get_holder_info',
@@ -246,7 +281,7 @@ server.registerTool(
 );
 
 // ---------------------------------------------------------------------------
-// 4. portkey_get_chain_info
+// 5. portkey_get_chain_info
 // ---------------------------------------------------------------------------
 server.registerTool(
   'portkey_get_chain_info',
@@ -760,14 +795,22 @@ server.registerTool(
       mnemonic: z.string().describe('Manager mnemonic (from portkey_create_wallet)'),
       caHash: z.string().describe('CA hash (from portkey_check_status)'),
       caAddress: z.string().describe('CA address (from portkey_check_status)'),
+      loginEmail: LOGIN_EMAIL.optional(),
       originChainId: CHAIN_ID.default('AELF').describe('Origin chain ID where CA was created'),
       network: NETWORK,
     },
   },
-  async ({ password, privateKey, mnemonic, caHash, caAddress, originChainId, network }) => {
+  async ({ password, privateKey, mnemonic, caHash, caAddress, loginEmail, originChainId, network }) => {
     try {
       return ok(saveKeystore({
-        password, privateKey, mnemonic, caHash, caAddress, originChainId, network: network || 'mainnet',
+        password,
+        privateKey,
+        mnemonic,
+        caHash,
+        caAddress,
+        loginEmail,
+        originChainId,
+        network: network || 'mainnet',
       }));
     } catch (err) { return fail(err); }
   },
@@ -782,12 +825,13 @@ server.registerTool(
     description: 'Unlock the encrypted keystore with a password. Loads the Manager wallet into memory for write operations. Use at the start of a new conversation if a keystore exists. Check portkey_wallet_status first to see if unlock is needed.',
     inputSchema: {
       password: z.string().min(1).describe('Keystore password'),
+      loginEmail: LOGIN_EMAIL.optional(),
       network: NETWORK,
     },
   },
-  async ({ password, network }) => {
+  async ({ password, loginEmail, network }) => {
     try {
-      return ok(unlockWallet(password, network || 'mainnet'));
+      return ok(unlockWallet(password, network || 'mainnet', loginEmail));
     } catch (err) { return fail(err); }
   },
 );
@@ -815,18 +859,40 @@ server.registerTool(
   {
     description: 'Check the wallet status: whether a keystore exists, whether it is unlocked, CA address, and manager address. Use at conversation start to determine if portkey_unlock is needed.',
     inputSchema: {
+      loginEmail: LOGIN_EMAIL.optional(),
       network: NETWORK,
     },
   },
-  async ({ network }) => {
+  async ({ loginEmail, network }) => {
     try {
-      return ok(getWalletStatus(network || 'mainnet'));
+      return ok(getWalletStatus(network || 'mainnet', loginEmail));
     } catch (err) { return fail(err); }
   },
 );
 
 // ---------------------------------------------------------------------------
-// 29. portkey_get_active_wallet
+// 29. portkey_list_wallet_profiles
+// ---------------------------------------------------------------------------
+server.registerTool(
+  'portkey_list_wallet_profiles',
+  {
+    description:
+      'List locally saved CA keystore profiles. Use when you need to discover which login emails already have local keystores and which profile is currently active.',
+    inputSchema: {
+      network: NETWORK.optional().describe('Optional network filter'),
+    },
+  },
+  async ({ network }) => {
+    try {
+      return ok({ profiles: listWalletProfiles(network) });
+    } catch (err) {
+      return fail(err);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 30. portkey_get_active_wallet
 // ---------------------------------------------------------------------------
 server.registerTool(
   'portkey_get_active_wallet',
@@ -845,7 +911,7 @@ server.registerTool(
 );
 
 // ---------------------------------------------------------------------------
-// 30. portkey_set_active_wallet
+// 31. portkey_set_active_wallet
 // ---------------------------------------------------------------------------
 server.registerTool(
   'portkey_set_active_wallet',
@@ -859,6 +925,7 @@ server.registerTool(
         .describe('Credential source'),
       network: NETWORK.optional().describe('Optional network tag'),
       address: z.string().optional().describe('EOA or manager address'),
+      loginEmail: LOGIN_EMAIL.optional(),
       caAddress: z.string().optional().describe('CA address'),
       caHash: z.string().optional().describe('CA hash'),
       walletFile: z.string().optional().describe('EOA wallet file absolute path'),

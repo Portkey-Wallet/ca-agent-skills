@@ -16,6 +16,7 @@ describe('SDK exports (index.ts)', () => {
   it('should export account functions', async () => {
     const mod = await import('../../index');
     expect(typeof mod.checkAccount).toBe('function');
+    expect(typeof mod.prepareAuthFlow).toBe('function');
     expect(typeof mod.getGuardianList).toBe('function');
     expect(typeof mod.getHolderInfo).toBe('function');
     expect(typeof mod.getChainInfo).toBe('function');
@@ -65,5 +66,7 @@ describe('SDK exports (index.ts)', () => {
   it('should export utility functions', async () => {
     const mod = await import('../../index');
     expect(typeof mod.getApprovalCount).toBe('function');
+    expect(typeof mod.listWalletProfiles).toBe('function');
+    expect(typeof mod.getWalletProfileByLoginEmail).toBe('function');
   });
 });

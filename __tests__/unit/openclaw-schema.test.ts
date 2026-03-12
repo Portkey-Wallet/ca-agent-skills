@@ -24,6 +24,10 @@ const EXACT_SCHEMA_EXPECTATIONS: Record<string, { properties: string[]; required
     properties: ['identifier', 'chain-id'],
     required: ['identifier'],
   },
+  'portkey-query-prepare-auth-flow': {
+    properties: ['email', 'chain-id'],
+    required: ['email'],
+  },
   'portkey-auth-send-code': {
     properties: ['email', 'verifier-id', 'operation', 'chain-id'],
     required: ['email', 'verifier-id', 'operation'],

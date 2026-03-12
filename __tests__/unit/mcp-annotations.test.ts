@@ -4,6 +4,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
 const READ_TOOLS = [
   'portkey_check_account',
+  'portkey_prepare_auth_flow',
   'portkey_get_guardian_list',
   'portkey_get_holder_info',
   'portkey_get_chain_info',
@@ -17,6 +18,7 @@ const READ_TOOLS = [
   'portkey_tx_result',
   'portkey_view_call',
   'portkey_wallet_status',
+  'portkey_list_wallet_profiles',
   'portkey_get_active_wallet',
 ];
 

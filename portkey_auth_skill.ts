@@ -4,7 +4,13 @@ import packageJson from './package.json';
 import { getConfig } from './lib/config.js';
 import { outputSuccess, outputError, safeJsonParse } from './cli-helpers.js';
 import { createWallet } from './lib/aelf-client.js';
-import { saveKeystore, unlockWallet, lockWallet, getWalletStatus } from './src/core/keystore.js';
+import {
+  saveKeystore,
+  unlockWallet,
+  lockWallet,
+  getWalletStatus,
+  listWalletProfiles,
+} from './src/core/keystore.js';
 import {
   getVerifierServer,
   sendVerificationCode,
@@ -135,12 +141,14 @@ program.command('save-keystore')
   .requiredOption('--mnemonic <words>', 'Manager mnemonic')
   .requiredOption('--ca-hash <hash>', 'CA hash')
   .requiredOption('--ca-address <addr>', 'CA address')
+  .option('--login-email <email>', 'Login email associated with this CA account')
   .option('--origin-chain-id <chainId>', 'Origin chain ID', 'AELF')
   .action(async (opts) => {
     try {
       outputSuccess(saveKeystore({
         password: opts.password, privateKey: opts.privateKey, mnemonic: opts.mnemonic,
         caHash: opts.caHash, caAddress: opts.caAddress,
+        loginEmail: opts.loginEmail,
         originChainId: opts.originChainId, network: program.opts().network || 'mainnet',
       }));
     } catch (err: any) { outputError(err.message); }
@@ -149,9 +157,14 @@ program.command('save-keystore')
 program.command('unlock')
   .description('Unlock the encrypted keystore with a password')
   .requiredOption('--password <pwd>', 'Keystore password')
+  .option('--login-email <email>', 'Login email associated with this CA account')
   .action(async (opts) => {
     try {
-      outputSuccess(unlockWallet(opts.password, program.opts().network || 'mainnet'));
+      outputSuccess(unlockWallet(
+        opts.password,
+        program.opts().network || 'mainnet',
+        opts.loginEmail,
+      ));
     } catch (err: any) { outputError(err.message); }
   });
 
@@ -165,9 +178,25 @@ program.command('lock')
 
 program.command('wallet-status')
   .description('Check wallet status (keystore exists, unlocked, CA info)')
+  .option('--login-email <email>', 'Login email associated with this CA account')
+  .action(async (opts) => {
+    try {
+      outputSuccess(getWalletStatus(
+        program.opts().network || 'mainnet',
+        opts.loginEmail,
+      ));
+    } catch (err: any) { outputError(err.message); }
+  });
+
+program.command('list-wallet-profiles')
+  .description('List locally saved CA keystore profiles')
   .action(async () => {
     try {
-      outputSuccess(getWalletStatus(program.opts().network || 'mainnet'));
+      const optionSource = program.getOptionValueSource('network');
+      const network = optionSource === 'default'
+        ? undefined
+        : program.opts().network;
+      outputSuccess({ profiles: listWalletProfiles(network) });
     } catch (err: any) { outputError(err.message); }
   });
 

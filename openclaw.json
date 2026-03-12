@@ -52,6 +52,33 @@
       }
     },
     {
+      "name": "portkey-query-prepare-auth-flow",
+      "description": "Prepare register/recovery flow for an email account",
+      "command": "bun run portkey_query_skill.ts prepare-auth-flow",
+      "args": [
+        "--email",
+        "--chain-id"
+      ],
+      "cwd": ".",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email address"
+          },
+          "chain-id": {
+            "type": "string",
+            "description": "Chain ID, default AELF"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
       "name": "portkey-query-chain-info",
       "description": "Get chain configuration info",
       "command": "sh",
@@ -258,12 +285,45 @@
         "--private-key",
         "--mnemonic",
         "--ca-hash",
-        "--ca-address"
+        "--ca-address",
+        "--login-email"
       ],
       "cwd": ".",
       "inputSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "Password to encrypt the keystore"
+          },
+          "private-key": {
+            "type": "string",
+            "description": "Manager private key"
+          },
+          "mnemonic": {
+            "type": "string",
+            "description": "Manager mnemonic"
+          },
+          "ca-hash": {
+            "type": "string",
+            "description": "CA hash"
+          },
+          "ca-address": {
+            "type": "string",
+            "description": "CA address"
+          },
+          "login-email": {
+            "type": "string",
+            "description": "Login email associated with this CA account"
+          }
+        },
+        "required": [
+          "password",
+          "private-key",
+          "mnemonic",
+          "ca-hash",
+          "ca-address"
+        ],
         "additionalProperties": true
       }
     },
@@ -272,12 +332,25 @@
       "description": "Unlock the encrypted keystore with a password",
       "command": "bun run portkey_auth_skill.ts unlock",
       "args": [
-        "--password"
+        "--password",
+        "--login-email"
       ],
       "cwd": ".",
       "inputSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "Keystore password"
+          },
+          "login-email": {
+            "type": "string",
+            "description": "Login email associated with this CA account"
+          }
+        },
+        "required": [
+          "password"
+        ],
         "additionalProperties": true
       }
     },
@@ -299,10 +372,29 @@
     {
       "name": "portkey-auth-wallet-status",
       "description": "Check wallet status (keystore exists, unlocked, CA info)",
+      "command": "bun run portkey_auth_skill.ts wallet-status",
+      "args": [
+        "--login-email"
+      ],
+      "cwd": ".",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "login-email": {
+            "type": "string",
+            "description": "Login email associated with this CA account"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "portkey-auth-list-wallet-profiles",
+      "description": "List locally saved CA keystore profiles",
       "command": "sh",
       "args": [
         "-lc",
-        "bun run portkey_auth_skill.ts wallet-status"
+        "bun run portkey_auth_skill.ts list-wallet-profiles"
       ],
       "cwd": ".",
       "inputSchema": {

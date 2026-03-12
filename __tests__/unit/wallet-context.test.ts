@@ -64,6 +64,27 @@ describe('wallet context storage', () => {
     expect(readWalletContext()?.profiles.default?.caHash).toBe('hash_1');
   });
 
+  test('CA keystore profiles with loginEmail use stable per-account profile ids', () => {
+    const result = setActiveWalletProfile(
+      {
+        walletType: 'CA',
+        source: 'ca-keystore',
+        network: 'mainnet',
+        loginEmail: 'User+1@Example.com',
+        address: 'ELF_manager_email_AELF',
+        caAddress: 'ELF_ca_email_AELF',
+        caHash: 'hash_email',
+        keystoreFile: '/tmp/mainnet/user%40example.com.keystore.json',
+      },
+      writer,
+    );
+
+    expect(result.activeProfileId).toBe('ca:mainnet:user%2B1%40example.com');
+    expect(result.profiles['ca:mainnet:user%2B1%40example.com']?.loginEmail).toBe(
+      'user+1@example.com',
+    );
+  });
+
   test('writes secure file permissions on unix-like platforms', () => {
     setActiveWalletProfile(
       {

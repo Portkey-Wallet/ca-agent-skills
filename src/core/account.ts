@@ -9,6 +9,10 @@ import type {
 import { createHttpClient, HttpError } from '../../lib/http.js';
 import { callViewMethod } from '../../lib/aelf-client.js';
 import { SkillError } from './errors.js';
+import {
+  getWalletProfileByLoginEmail,
+  type WalletProfileSummary,
+} from './keystore.js';
 
 const ACCOUNT_NOT_FOUND_ERROR_CODE = '3002';
 
@@ -108,6 +112,23 @@ export interface GetGuardianListResult {
   createChainId?: ChainId;
 }
 
+export interface PrepareAuthFlowParams {
+  email: string;
+  network: 'mainnet' | 'testnet';
+  chainId?: ChainId;
+}
+
+export interface PrepareAuthFlowResult {
+  email: string;
+  isRegistered: boolean;
+  recommendedFlow: 'register' | 'recovery';
+  originChainId: ChainId | null;
+  caHash?: string;
+  caAddress?: string;
+  guardians?: GuardianListItem[];
+  matchedLocalProfile?: WalletProfileSummary | null;
+}
+
 /**
  * Get all guardians associated with an account.
  *
@@ -143,6 +164,46 @@ export async function getGuardianList(
     caHash: result.caHash,
     caAddress: result.caAddress,
     createChainId: result.createChainId,
+  };
+}
+
+export async function prepareAuthFlow(
+  config: PortkeyConfig,
+  params: PrepareAuthFlowParams,
+): Promise<PrepareAuthFlowResult> {
+  if (!params.email) throw new SkillError('INVALID_PARAMS', 'email is required');
+  if (!params.network) throw new SkillError('INVALID_PARAMS', 'network is required');
+
+  const matchedLocalProfile = getWalletProfileByLoginEmail(
+    params.network,
+    params.email,
+  );
+  const account = await checkAccount(config, { email: params.email });
+
+  if (!account.isRegistered) {
+    return {
+      email: params.email,
+      isRegistered: false,
+      recommendedFlow: 'register',
+      originChainId: account.originChainId,
+      matchedLocalProfile,
+    };
+  }
+
+  const guardianList = await getGuardianList(config, {
+    identifier: params.email,
+    chainId: params.chainId || account.originChainId || 'AELF',
+  });
+
+  return {
+    email: params.email,
+    isRegistered: true,
+    recommendedFlow: 'recovery',
+    originChainId: guardianList.createChainId || account.originChainId,
+    caHash: guardianList.caHash,
+    caAddress: guardianList.caAddress,
+    guardians: guardianList.guardians,
+    matchedLocalProfile,
   };
 }
 

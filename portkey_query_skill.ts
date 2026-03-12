@@ -3,7 +3,13 @@ import { Command } from 'commander';
 import packageJson from './package.json';
 import { getConfig } from './lib/config.js';
 import { outputSuccess, outputError, safeJsonParse } from './cli-helpers.js';
-import { checkAccount, getGuardianList, getHolderInfo, getChainInfo } from './src/core/account.js';
+import {
+  checkAccount,
+  getGuardianList,
+  getHolderInfo,
+  getChainInfo,
+  prepareAuthFlow,
+} from './src/core/account.js';
 import { getTokenBalance, getTokenList, getNftCollections, getNftItems, getTokenPrice } from './src/core/assets.js';
 import { callContractViewMethod } from './src/core/contract.js';
 import { getTransactionResult } from './src/core/transfer.js';
@@ -34,6 +40,22 @@ program.command('guardian-list')
     try {
       const config = getConfig({ network: program.opts().network });
       outputSuccess(await getGuardianList(config, { identifier: opts.identifier, chainId: opts.chainId }));
+    } catch (err: any) { outputError(err.message); }
+  });
+
+program.command('prepare-auth-flow')
+  .description('Prepare register/recovery flow for an email account')
+  .requiredOption('--email <email>', 'Email address')
+  .option('--chain-id <chainId>', 'Chain ID', 'AELF')
+  .action(async (opts) => {
+    try {
+      const network = (program.opts().network || 'mainnet') as 'mainnet' | 'testnet';
+      const config = getConfig({ network });
+      outputSuccess(await prepareAuthFlow(config, {
+        email: opts.email,
+        chainId: opts.chainId,
+        network,
+      }));
     } catch (err: any) { outputError(err.message); }
   });
 

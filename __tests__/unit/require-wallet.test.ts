@@ -81,6 +81,7 @@ describe('mcp requireWallet', () => {
       mnemonic: manager.mnemonic!,
       caHash: 'hash_ctx',
       caAddress: 'ELF_ca_ctx_AELF',
+      loginEmail: 'ctx@example.com',
       originChainId: 'AELF',
       network: 'mainnet',
     });

@@ -1,22 +1,58 @@
-import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import {
   MockHttpError,
   coreMockState,
   installCoreModuleMocks,
   resetCoreMockState,
 } from './core-mock-state';
+import { createWallet } from '../../lib/aelf-client.js';
 
 installCoreModuleMocks();
 
+const originalHome = process.env.HOME;
+const originalContextPath = process.env.PORTKEY_SKILL_WALLET_CONTEXT_PATH;
+const testHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ca-account-home-'));
+process.env.HOME = testHome;
+process.env.PORTKEY_SKILL_WALLET_CONTEXT_PATH = path.join(
+  testHome,
+  '.portkey',
+  'skill-wallet',
+  'context.v1.json',
+);
+
 let account: typeof import('../../src/core/account.js');
+let keystore: typeof import('../../src/core/keystore.js');
 
 beforeAll(async () => {
   account = await import('../../src/core/account.js');
+  keystore = await import('../../src/core/keystore.js');
 });
 
 beforeEach(() => {
   resetCoreMockState();
   account.clearChainInfoCache();
+  keystore.clearKeystoreState();
+  const portkeyDir = path.join(testHome, '.portkey');
+  if (fs.existsSync(portkeyDir)) {
+    fs.rmSync(portkeyDir, { recursive: true, force: true });
+  }
+});
+
+afterAll(() => {
+  if (originalHome !== undefined) {
+    process.env.HOME = originalHome;
+  } else {
+    delete process.env.HOME;
+  }
+  if (originalContextPath !== undefined) {
+    process.env.PORTKEY_SKILL_WALLET_CONTEXT_PATH = originalContextPath;
+  } else {
+    delete process.env.PORTKEY_SKILL_WALLET_CONTEXT_PATH;
+  }
+  fs.rmSync(testHome, { recursive: true, force: true });
 });
 
 const TEST_CONFIG = {
@@ -223,5 +259,69 @@ describe('core/account', () => {
         { chainId: 'AELF', caHash: 'MISSING_HASH' },
       ),
     ).rejects.toThrow('Holder not found');
+  });
+
+  test('prepareAuthFlow recommends register for unregistered emails', async () => {
+    coreMockState.httpGetImpl = async (requestPath: string) => {
+      if (requestPath === '/api/app/account/registerInfo') {
+        throw new MockHttpError(404, 'Not Found', JSON.stringify({ code: '3002' }));
+      }
+      return {};
+    };
+
+    const result = await account.prepareAuthFlow(
+      TEST_CONFIG,
+      { email: 'new@example.com', network: 'mainnet', chainId: 'AELF' },
+    );
+
+    expect(result.isRegistered).toBe(false);
+    expect(result.recommendedFlow).toBe('register');
+    expect(result.guardians).toBeUndefined();
+    expect(result.matchedLocalProfile).toBeNull();
+  });
+
+  test('prepareAuthFlow recommends recovery and includes guardian + local profile data', async () => {
+    const wallet = createWallet();
+    keystore.saveKeystore({
+      password: 'secret',
+      privateKey: wallet.privateKey,
+      mnemonic: wallet.mnemonic!,
+      caHash: 'local_hash',
+      caAddress: 'ELF_local_AELF',
+      loginEmail: 'known@example.com',
+      originChainId: 'AELF',
+      network: 'mainnet',
+    });
+    keystore.lockWallet();
+
+    coreMockState.httpGetImpl = async (requestPath: string) => {
+      if (requestPath === '/api/app/account/registerInfo') {
+        return { originChainId: 'AELF' };
+      }
+      if (requestPath === '/api/app/account/guardianIdentifiers') {
+        return {
+          guardianList: {
+            guardians: [{ guardianIdentifier: 'known@example.com', type: 'Email' }],
+          },
+          caHash: 'chain_hash',
+          caAddress: 'ELF_chain_AELF',
+          createChainId: 'AELF',
+        };
+      }
+      return {};
+    };
+
+    const result = await account.prepareAuthFlow(
+      TEST_CONFIG,
+      { email: 'known@example.com', network: 'mainnet', chainId: 'AELF' },
+    );
+
+    expect(result.isRegistered).toBe(true);
+    expect(result.recommendedFlow).toBe('recovery');
+    expect(result.caHash).toBe('chain_hash');
+    expect(result.caAddress).toBe('ELF_chain_AELF');
+    expect(result.guardians?.length).toBe(1);
+    expect(result.matchedLocalProfile?.loginEmail).toBe('known@example.com');
+    expect(result.matchedLocalProfile?.caHash).toBe('local_hash');
   });
 });

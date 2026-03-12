@@ -42,6 +42,8 @@ export interface CaKeystoreFile {
   caHash: string;
   /** CA address (e.g. ELF_xxx_AELF) */
   caAddress: string;
+  /** Login email associated with this local CA profile */
+  loginEmail?: string;
   /** Origin chain where CA was created */
   originChainId: ChainId;
   /** aelf-sdk standard keystore object (encrypted) */
@@ -52,8 +54,10 @@ export interface UnlockedWalletState {
   wallet: AElfWallet;
   caHash: string;
   caAddress: string;
+  loginEmail?: string;
   originChainId: ChainId;
   network: string;
+  keystorePath: string;
 }
 
 export interface WalletStatus {
@@ -65,10 +69,21 @@ export interface WalletStatus {
   caAddress: string | null;
   /** CA hash */
   caHash: string | null;
+  /** Login email associated with this local CA profile */
+  loginEmail: string | null;
   /** Manager address (only available when unlocked) */
   managerAddress: string | null;
   /** Network */
   network: string;
+}
+
+export interface WalletProfileSummary {
+  loginEmail: string | null;
+  network: string;
+  caAddress: string | null;
+  caHash: string | null;
+  keystoreFile: string;
+  isActive: boolean;
 }
 
 export interface SaveKeystoreParams {
@@ -86,6 +101,8 @@ export interface SaveKeystoreParams {
   originChainId: ChainId;
   /** Network (mainnet/testnet) */
   network: string;
+  /** Login email associated with the CA account */
+  loginEmail?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,20 +116,110 @@ let unlockedState: UnlockedWalletState | null = null;
 // ---------------------------------------------------------------------------
 
 /** Validate and get the keystore file path for a given network. */
-export function getKeystorePath(network: string): string {
+export function getKeystorePath(network: string, loginEmail?: string): string {
   if (!ALLOWED_NETWORKS.includes(network)) {
     throw new Error(
       `Invalid network "${network}". Allowed values: ${ALLOWED_NETWORKS.join(', ')}`,
     );
   }
-  return path.join(KEYSTORE_DIR, `${network}.keystore.json`);
+  const normalizedLoginEmail = normalizeLoginEmail(loginEmail);
+  if (!normalizedLoginEmail) {
+    return path.join(KEYSTORE_DIR, `${network}.keystore.json`);
+  }
+  return path.join(
+    KEYSTORE_DIR,
+    network,
+    `${encodeURIComponent(normalizedLoginEmail)}.keystore.json`,
+  );
+}
+
+function normalizeLoginEmail(loginEmail?: string): string | undefined {
+  const normalized = typeof loginEmail === 'string'
+    ? loginEmail.trim().toLowerCase()
+    : '';
+  return normalized || undefined;
+}
+
+function ensureDir(dirPath: string): void {
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true, mode: DIR_MODE });
+  }
+  try {
+    fs.chmodSync(dirPath, DIR_MODE);
+  } catch {
+    // Ignore permission errors for externally managed parent dirs in tests.
+  }
 }
 
 /** Ensure the keystore directory exists with proper permissions. */
-function ensureKeystoreDir(): void {
-  if (!fs.existsSync(KEYSTORE_DIR)) {
-    fs.mkdirSync(KEYSTORE_DIR, { recursive: true, mode: DIR_MODE });
+function ensureKeystoreDir(filePath: string): void {
+  ensureDir(KEYSTORE_DIR);
+  ensureDir(path.dirname(filePath));
+}
+
+function readKeystoreFile(filePath: string): CaKeystoreFile {
+  const raw = fs.readFileSync(filePath, 'utf-8');
+  return JSON.parse(raw) as CaKeystoreFile;
+}
+
+function readKeystoreMetadata(filePath: string): {
+  caAddress: string | null;
+  caHash: string | null;
+  loginEmail: string | null;
+} {
+  try {
+    const fileContent = readKeystoreFile(filePath);
+    return {
+      caAddress: fileContent.caAddress || null,
+      caHash: fileContent.caHash || null,
+      loginEmail: fileContent.loginEmail || null,
+    };
+  } catch {
+    return {
+      caAddress: null,
+      caHash: null,
+      loginEmail: null,
+    };
   }
+}
+
+function getRequestedKeystorePath(network: string, loginEmail?: string): string {
+  return getKeystorePath(network, loginEmail);
+}
+
+function isSamePath(left?: string, right?: string): boolean {
+  return Boolean(left && right && path.resolve(left) === path.resolve(right));
+}
+
+function getActiveKeystorePath(): string | undefined {
+  const unlocked = unlockedState?.keystorePath;
+  if (unlocked) return unlocked;
+  const active = getActiveWalletProfile();
+  return active?.source === 'ca-keystore' ? active.keystoreFile : undefined;
+}
+
+function loadWalletProfileSummary(
+  network: string,
+  keystoreFile: string,
+): WalletProfileSummary {
+  const metadata = readKeystoreMetadata(keystoreFile);
+  return {
+    loginEmail: metadata.loginEmail,
+    network,
+    caAddress: metadata.caAddress,
+    caHash: metadata.caHash,
+    keystoreFile,
+    isActive: isSamePath(getActiveKeystorePath(), keystoreFile),
+  };
+}
+
+function listProfileKeystoreFiles(network: string): string[] {
+  const profileDir = path.join(KEYSTORE_DIR, network);
+  if (!fs.existsSync(profileDir)) return [];
+
+  return fs.readdirSync(profileDir)
+    .filter((fileName) => fileName.endsWith('.keystore.json'))
+    .map((fileName) => path.join(profileDir, fileName));
 }
 
 // ---------------------------------------------------------------------------
@@ -131,7 +238,16 @@ export function saveKeystore(params: SaveKeystoreParams): {
   caAddress: string;
   managerAddress: string;
 } {
-  const { password, privateKey, mnemonic, caHash, caAddress, originChainId, network } = params;
+  const {
+    password,
+    privateKey,
+    mnemonic,
+    caHash,
+    caAddress,
+    originChainId,
+    network,
+    loginEmail,
+  } = params;
 
   if (!password) throw new Error('password is required');
   if (!privateKey) throw new Error('privateKey is required');
@@ -151,13 +267,14 @@ export function saveKeystore(params: SaveKeystoreParams): {
   const fileContent: CaKeystoreFile = {
     caHash,
     caAddress,
+    loginEmail: normalizeLoginEmail(loginEmail),
     originChainId: originChainId || 'AELF',
     keystore: keystoreObj as unknown as Record<string, unknown>,
   };
 
   // Write to disk
-  ensureKeystoreDir();
-  const filePath = getKeystorePath(network);
+  const filePath = getKeystorePath(network, loginEmail);
+  ensureKeystoreDir(filePath);
   fs.writeFileSync(filePath, JSON.stringify(fileContent, null, 2), {
     mode: FILE_MODE,
   });
@@ -167,8 +284,10 @@ export function saveKeystore(params: SaveKeystoreParams): {
     wallet,
     caHash,
     caAddress,
+    loginEmail: fileContent.loginEmail,
     originChainId: originChainId || 'AELF',
     network,
+    keystorePath: filePath,
   };
 
   setActiveWalletProfile(
@@ -178,6 +297,7 @@ export function saveKeystore(params: SaveKeystoreParams): {
       network,
       caHash,
       caAddress,
+      loginEmail: fileContent.loginEmail,
       address: wallet.address,
       keystoreFile: filePath,
     },
@@ -207,25 +327,27 @@ export function saveKeystore(params: SaveKeystoreParams): {
 export function unlockWallet(
   password: string,
   network: string,
+  loginEmail?: string,
 ): {
   message: string;
   caAddress: string;
   caHash: string;
   managerAddress: string;
   originChainId: ChainId;
+  loginEmail: string | null;
 } {
   if (!password) throw new Error('password is required');
 
-  const filePath = getKeystorePath(network);
+  const filePath = getRequestedKeystorePath(network, loginEmail);
   if (!fs.existsSync(filePath)) {
     throw new Error(
-      `No keystore found for network "${network}". ` +
+      `No keystore found for network "${network}"` +
+      `${loginEmail ? ` and loginEmail "${normalizeLoginEmail(loginEmail)}"` : ''}. ` +
       `Expected at: ${filePath}. Use portkey_save_keystore first.`,
     );
   }
 
-  const raw = fs.readFileSync(filePath, 'utf-8');
-  const fileContent: CaKeystoreFile = JSON.parse(raw);
+  const fileContent = readKeystoreFile(filePath);
 
   // Use aelf-sdk's unlockKeystore to decrypt
   const decrypted = unlockKeystore(fileContent.keystore, password);
@@ -240,8 +362,10 @@ export function unlockWallet(
     wallet,
     caHash: fileContent.caHash,
     caAddress: fileContent.caAddress,
+    loginEmail: fileContent.loginEmail,
     originChainId: fileContent.originChainId,
     network,
+    keystorePath: filePath,
   };
 
   setActiveWalletProfile(
@@ -251,6 +375,7 @@ export function unlockWallet(
       network,
       caHash: fileContent.caHash,
       caAddress: fileContent.caAddress,
+      loginEmail: fileContent.loginEmail,
       address: wallet.address,
       keystoreFile: filePath,
     },
@@ -266,6 +391,7 @@ export function unlockWallet(
     caHash: fileContent.caHash,
     managerAddress: wallet.address,
     originChainId: fileContent.originChainId,
+    loginEmail: fileContent.loginEmail || null,
   };
 }
 
@@ -285,30 +411,20 @@ export function lockWallet(): { message: string } {
  * Get the current wallet status for a given network.
  * Readable even when locked (reads CA metadata from keystore file).
  */
-export function getWalletStatus(network: string): WalletStatus {
-  const filePath = getKeystorePath(network);
+export function getWalletStatus(network: string, loginEmail?: string): WalletStatus {
+  const filePath = getRequestedKeystorePath(network, loginEmail);
   const exists = fs.existsSync(filePath);
-  const unlocked = unlockedState !== null && unlockedState.network === network;
-
-  let caAddress: string | null = null;
-  let caHash: string | null = null;
-
-  if (exists) {
-    try {
-      const raw = fs.readFileSync(filePath, 'utf-8');
-      const fileContent: CaKeystoreFile = JSON.parse(raw);
-      caAddress = fileContent.caAddress;
-      caHash = fileContent.caHash;
-    } catch {
-      // File exists but can't be read — treat as no metadata
-    }
-  }
+  const unlocked = unlockedState !== null && isSamePath(unlockedState.keystorePath, filePath);
+  const metadata = exists
+    ? readKeystoreMetadata(filePath)
+    : { caAddress: null, caHash: null, loginEmail: null };
 
   return {
     exists,
     unlocked,
-    caAddress,
-    caHash,
+    caAddress: metadata.caAddress,
+    caHash: metadata.caHash,
+    loginEmail: metadata.loginEmail,
     managerAddress: unlocked ? unlockedState!.wallet.address : null,
     network,
   };
@@ -329,6 +445,45 @@ export function getUnlockedWallet(): UnlockedWalletState | null {
  */
 export function clearKeystoreState(): void {
   unlockedState = null;
+}
+
+export function listWalletProfiles(network?: string): WalletProfileSummary[] {
+  const networks = network ? [network] : ALLOWED_NETWORKS;
+  const profiles: WalletProfileSummary[] = [];
+
+  for (const currentNetwork of networks) {
+    if (!ALLOWED_NETWORKS.includes(currentNetwork)) {
+      throw new Error(
+        `Invalid network "${currentNetwork}". Allowed values: ${ALLOWED_NETWORKS.join(', ')}`,
+      );
+    }
+
+    const legacyPath = getKeystorePath(currentNetwork);
+    if (fs.existsSync(legacyPath)) {
+      profiles.push(loadWalletProfileSummary(currentNetwork, legacyPath));
+    }
+
+    for (const profilePath of listProfileKeystoreFiles(currentNetwork)) {
+      profiles.push(loadWalletProfileSummary(currentNetwork, profilePath));
+    }
+  }
+
+  return profiles.sort((left, right) => {
+    const networkCompare = left.network.localeCompare(right.network);
+    if (networkCompare !== 0) return networkCompare;
+    const emailCompare = (left.loginEmail || '').localeCompare(right.loginEmail || '');
+    if (emailCompare !== 0) return emailCompare;
+    return left.keystoreFile.localeCompare(right.keystoreFile);
+  });
+}
+
+export function getWalletProfileByLoginEmail(
+  network: string,
+  loginEmail: string,
+): WalletProfileSummary | null {
+  const filePath = getKeystorePath(network, loginEmail);
+  if (!fs.existsSync(filePath)) return null;
+  return loadWalletProfileSummary(network, filePath);
 }
 
 // ---------------------------------------------------------------------------
@@ -371,7 +526,10 @@ function readKeystoreProfileSigner(input: SignerContextInput): AelfSigner {
       ),
     );
   }
-  const keystorePath = profile.keystoreFile || getKeystorePath(profile.network || 'mainnet');
+  const keystorePath = profile.keystoreFile || getKeystorePath(
+    profile.network || 'mainnet',
+    profile.loginEmail,
+  );
   if (!fs.existsSync(keystorePath)) {
     throw new Error(
       formatSignerError(
@@ -390,8 +548,7 @@ function readKeystoreProfileSigner(input: SignerContextInput): AelfSigner {
     );
   }
 
-  const raw = fs.readFileSync(keystorePath, 'utf-8');
-  const fileContent: CaKeystoreFile = JSON.parse(raw);
+  const fileContent = readKeystoreFile(keystorePath);
   const decrypted = unlockKeystore(fileContent.keystore, password);
   if (!decrypted?.privateKey) {
     throw new Error(
@@ -483,6 +640,7 @@ export function setActiveWallet(input: {
   source: 'eoa-local' | 'ca-keystore' | 'env';
   network?: string;
   address?: string;
+  loginEmail?: string;
   caAddress?: string;
   caHash?: string;
   walletFile?: string;

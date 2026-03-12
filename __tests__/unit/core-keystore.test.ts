@@ -48,6 +48,8 @@ describe('core/keystore', () => {
     expect(() => keystore.getKeystorePath('devnet')).toThrow('Invalid network');
     const mainnetPath = keystore.getKeystorePath('mainnet');
     expect(mainnetPath.endsWith('mainnet.keystore.json')).toBe(true);
+    const profilePath = keystore.getKeystorePath('mainnet', 'User@One.com');
+    expect(profilePath.endsWith('mainnet/user%40one.com.keystore.json')).toBe(true);
   });
 
   test('saveKeystore validates required params', () => {
@@ -93,6 +95,43 @@ describe('core/keystore', () => {
     expect(active?.caAddress).toBe('ELF_ca_AELF');
   });
 
+  test('saveKeystore with loginEmail writes profile-specific keystore without overwriting others', () => {
+    const first = createWallet();
+    const second = createWallet();
+
+    const firstResult = keystore.saveKeystore({
+      password: 'secret',
+      privateKey: first.privateKey,
+      mnemonic: first.mnemonic!,
+      caHash: 'hash_first_email',
+      caAddress: 'ELF_ca_first_email_AELF',
+      loginEmail: 'first@example.com',
+      originChainId: 'AELF',
+      network: 'mainnet',
+    });
+    const secondResult = keystore.saveKeystore({
+      password: 'secret',
+      privateKey: second.privateKey,
+      mnemonic: second.mnemonic!,
+      caHash: 'hash_second_email',
+      caAddress: 'ELF_ca_second_email_AELF',
+      loginEmail: 'second@example.com',
+      originChainId: 'AELF',
+      network: 'mainnet',
+    });
+
+    expect(firstResult.keystorePath).not.toBe(secondResult.keystorePath);
+    expect(fs.existsSync(firstResult.keystorePath)).toBe(true);
+    expect(fs.existsSync(secondResult.keystorePath)).toBe(true);
+
+    const profiles = keystore.listWalletProfiles('mainnet');
+    expect(profiles.map((item) => item.loginEmail)).toContain('first@example.com');
+    expect(profiles.map((item) => item.loginEmail)).toContain('second@example.com');
+
+    const active = keystore.getActiveWallet();
+    expect(active?.loginEmail).toBe('second@example.com');
+  });
+
   test('unlockWallet throws when file does not exist', () => {
     keystore.clearKeystoreState();
     const path = keystore.getKeystorePath('mainnet');
@@ -123,6 +162,46 @@ describe('core/keystore', () => {
     expect(keystore.getUnlockedWallet()).not.toBeNull();
     keystore.lockWallet();
     expect(keystore.getUnlockedWallet()).toBeNull();
+  });
+
+  test('unlockWallet and getWalletStatus target the requested loginEmail profile', () => {
+    const first = createWallet();
+    const second = createWallet();
+
+    keystore.saveKeystore({
+      password: 'secret',
+      privateKey: first.privateKey,
+      mnemonic: first.mnemonic!,
+      caHash: 'hash_first_lookup',
+      caAddress: 'ELF_ca_first_lookup_AELF',
+      loginEmail: 'first@example.com',
+      originChainId: 'AELF',
+      network: 'mainnet',
+    });
+    keystore.saveKeystore({
+      password: 'secret',
+      privateKey: second.privateKey,
+      mnemonic: second.mnemonic!,
+      caHash: 'hash_second_lookup',
+      caAddress: 'ELF_ca_second_lookup_AELF',
+      loginEmail: 'second@example.com',
+      originChainId: 'AELF',
+      network: 'mainnet',
+    });
+
+    keystore.lockWallet();
+
+    const unlocked = keystore.unlockWallet('secret', 'mainnet', 'first@example.com');
+    expect(unlocked.caHash).toBe('hash_first_lookup');
+    expect(unlocked.loginEmail).toBe('first@example.com');
+
+    const firstStatus = keystore.getWalletStatus('mainnet', 'first@example.com');
+    const secondStatus = keystore.getWalletStatus('mainnet', 'second@example.com');
+    expect(firstStatus.unlocked).toBe(true);
+    expect(firstStatus.caHash).toBe('hash_first_lookup');
+    expect(firstStatus.loginEmail).toBe('first@example.com');
+    expect(secondStatus.unlocked).toBe(false);
+    expect(secondStatus.caHash).toBe('hash_second_lookup');
   });
 
   test('createSignerFromCaWallet works with unlocked wallet and env fallback', () => {
@@ -162,6 +241,7 @@ describe('core/keystore', () => {
     expect(status.exists).toBe(true);
     expect(status.caAddress).toBeNull();
     expect(status.caHash).toBeNull();
+    expect(status.loginEmail).toBeNull();
   });
 
   test('resolveSignerContext reads active CA keystore with password env', () => {
@@ -172,6 +252,7 @@ describe('core/keystore', () => {
       mnemonic: wallet.mnemonic!,
       caHash: 'hash_ctx',
       caAddress: 'ELF_ctx_AELF',
+      loginEmail: 'ctx@example.com',
       originChainId: 'AELF',
       network: 'mainnet',
     });
@@ -221,5 +302,28 @@ describe('core/keystore', () => {
     expect(() => keystore.resolveSignerContext({ signerMode: 'auto' })).toThrow(
       'SIGNER_PASSWORD_REQUIRED',
     );
+  });
+
+  test('legacy keystore still unlocks and reports status without loginEmail', () => {
+    const wallet = createWallet();
+
+    keystore.saveKeystore({
+      password: 'secret',
+      privateKey: wallet.privateKey,
+      mnemonic: wallet.mnemonic!,
+      caHash: 'hash_legacy',
+      caAddress: 'ELF_ca_legacy_AELF',
+      originChainId: 'AELF',
+      network: 'mainnet',
+    });
+    keystore.lockWallet();
+
+    const unlocked = keystore.unlockWallet('secret', 'mainnet');
+    expect(unlocked.caHash).toBe('hash_legacy');
+
+    const status = keystore.getWalletStatus('mainnet');
+    expect(status.exists).toBe(true);
+    expect(status.unlocked).toBe(true);
+    expect(status.caHash).toBe('hash_legacy');
   });
 });
