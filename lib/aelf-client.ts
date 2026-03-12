@@ -170,6 +170,9 @@ export async function encodeManagerForwardCallParams(
   // Get target contract's protobuf descriptors
   const fds = await instance.chain.getContractFileDescriptorSet(params.contractAddress);
   const root = AElf.pbjs.Root.fromDescriptor(fds, 'proto3');
+  if (typeof root.resolveAll === 'function') {
+    root.resolveAll();
+  }
 
   // Find the method's input type across all services
   let inputType: unknown = null;
