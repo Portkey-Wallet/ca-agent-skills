@@ -90,8 +90,10 @@ export async function callViewMethod<T = unknown>(
   params?: Record<string, unknown>,
 ): Promise<T> {
   // View methods don't require a real identity — use a random ephemeral wallet.
-  // NEVER hard-code a real private key here.
-  const defaultWallet = createWallet();
+  // Rehydrate it via getWalletByPrivateKey so aelf-sdk receives a full wallet
+  // object with keyPair/childWallet metadata for read-only calls.
+  const ephemeral = createWallet();
+  const defaultWallet = getWalletByPrivateKey(ephemeral.privateKey);
   const contract = await getContractInstance(rpcUrl, contractAddress, defaultWallet);
 
   const method = contract[methodName];
