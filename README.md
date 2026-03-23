@@ -91,7 +91,7 @@ Manager private keys are encrypted and stored locally using aelf-sdk's keystore 
 ```bash
 # AI calls portkey_wallet_status to check if keystore exists
 # If locked, asks user for password → portkey_unlock(password)
-# Write operations now work automatically
+# Write operations in the same process now work automatically
 ```
 
 ### Manual CLI usage
@@ -108,6 +108,9 @@ bun run portkey_auth_skill.ts save-keystore \
 # Unlock
 bun run portkey_auth_skill.ts unlock --password "your-password"
 
+# Or target a specific profile/keystore file
+bun run portkey_auth_skill.ts unlock --password "your-password" --login-email "user@example.com"
+
 # Check status
 bun run portkey_auth_skill.ts wallet-status
 
@@ -120,7 +123,38 @@ bun run portkey_auth_skill.ts lock
 1. **Save** — encrypts the Manager private key + mnemonic with a user-provided password, writes to `~/.portkey/ca/`
 2. **Unlock** — decrypts the keystore, loads the wallet into memory for the current process
 3. **Lock** — clears the private key from memory
-4. **Write operations** — automatically use the unlocked wallet; falls back to `PORTKEY_PRIVATE_KEY` env var if no keystore is unlocked
+4. **Write operations** — automatically use the unlocked wallet for the current process; falls back to `PORTKEY_PRIVATE_KEY` env var if no keystore is unlocked
+
+### Recommended CA transfer path
+
+```bash
+# 1. recover -> save reusable keystore
+bun run portkey_auth_skill.ts recover-and-save \
+  --email "user@example.com" \
+  --guardians-approved '[...]' \
+  --chain-id AELF \
+  --password "your-password"
+
+# 2. wait until the recovered manager appears on the target chain
+# 3. collect fresh transferApprove proofs
+# 4. transfer using the saved keystore directly in the tx command
+bun run portkey_tx_skill.ts transfer \
+  --login-email "user@example.com" \
+  --password "your-password" \
+  --ca-hash "<caHash>" \
+  --token-contract "<tokenContract>" \
+  --symbol ELF \
+  --to "<receiver>" \
+  --amount 101000000 \
+  --chain-id tDVV \
+  --guardians-approved '[...]'
+```
+
+Notes:
+
+- CA write commands can now resolve signer directly from `--login-email` + `--password`, so they no longer depend on a previous `unlock` from another CLI process.
+- Same-chain and cross-chain transfers now check whether the current manager is already synced to the target chain before sending any transaction.
+- Transfer results include a fee preview when the chain can calculate it, including `chargingAddress` and whether the CA appears to be paying the fee.
 
 ## Cross-skill signing
 

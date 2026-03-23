@@ -13,6 +13,7 @@ import {
 import { getTokenBalance, getTokenList, getNftCollections, getNftItems, getTokenPrice } from './src/core/assets.js';
 import { callContractViewMethod } from './src/core/contract.js';
 import { getTransactionResult } from './src/core/transfer.js';
+import { transferPreflight } from './src/core/security.js';
 import { validateRpcUrl } from './lib/http.js';
 import type { CaAddressInfo, TokenListStrategy } from './lib/types.js';
 
@@ -172,6 +173,26 @@ program.command('tx-result')
     try {
       const config = getConfig({ network: program.opts().network });
       outputSuccess(await getTransactionResult(config, { txId: opts.txId, chainId: opts.chainId }));
+    } catch (err: any) { outputError(err.message); }
+  });
+
+program.command('transfer-preflight')
+  .description('Check whether a transfer can proceed directly, needs one-time approval, or is blocked by wallet security')
+  .requiredOption('--ca-hash <hash>', 'CA hash')
+  .requiredOption('--ca-address <addr>', 'CA address on the source chain')
+  .requiredOption('--chain-id <chainId>', 'Chain ID')
+  .requiredOption('--symbol <symbol>', 'Token symbol')
+  .requiredOption('--amount <amount>', 'Amount in smallest unit')
+  .action(async (opts) => {
+    try {
+      const config = getConfig({ network: program.opts().network });
+      outputSuccess(await transferPreflight(config, {
+        caHash: opts.caHash,
+        caAddress: opts.caAddress,
+        chainId: opts.chainId,
+        symbol: opts.symbol,
+        amount: opts.amount,
+      }));
     } catch (err: any) { outputError(err.message); }
   });
 

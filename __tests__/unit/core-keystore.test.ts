@@ -350,6 +350,67 @@ describe('core/keystore', () => {
     );
   });
 
+  test('resolveManagerWallet unlocks a requested CA profile directly from loginEmail + password', () => {
+    const wallet = createWallet();
+    keystore.saveKeystore({
+      password: 'secret',
+      privateKey: wallet.privateKey,
+      mnemonic: wallet.mnemonic!,
+      caHash: 'hash_resolve_profile',
+      caAddress: 'ELF_resolve_profile_tDVV',
+      loginEmail: 'resolve@example.com',
+      originChainId: 'AELF',
+      network: 'mainnet',
+    });
+    keystore.lockWallet();
+
+    const resolved = keystore.resolveManagerWallet({
+      network: 'mainnet',
+      loginEmail: 'resolve@example.com',
+      password: 'secret',
+    });
+
+    expect(resolved.wallet.address).toBe(wallet.address);
+    expect(resolved.source).toBe('ca-keystore');
+    expect(resolved.caHash).toBe('hash_resolve_profile');
+    expect(resolved.originChainId).toBe('AELF');
+  });
+
+  test('resolveManagerWallet prefers explicit privateKey when provided', () => {
+    const wallet = createWallet();
+    const resolved = keystore.resolveManagerWallet({
+      network: 'mainnet',
+      privateKey: wallet.privateKey,
+    });
+
+    expect(resolved.wallet.address).toBe(wallet.address);
+    expect(resolved.source).toBe('explicit');
+    expect(resolved.caHash).toBeNull();
+  });
+
+  test('resolveManagerWallet reuses matching unlocked wallet before re-unlocking', () => {
+    const wallet = createWallet();
+    keystore.saveKeystore({
+      password: 'secret',
+      privateKey: wallet.privateKey,
+      mnemonic: wallet.mnemonic!,
+      caHash: 'hash_unlocked_reuse',
+      caAddress: 'ELF_reuse_tDVV',
+      loginEmail: 'reuse@example.com',
+      originChainId: 'tDVV',
+      network: 'mainnet',
+    });
+
+    const resolved = keystore.resolveManagerWallet({
+      network: 'mainnet',
+      loginEmail: 'reuse@example.com',
+    });
+
+    expect(resolved.wallet.address).toBe(wallet.address);
+    expect(resolved.source).toBe('unlocked');
+    expect(resolved.loginEmail).toBe('reuse@example.com');
+  });
+
   test('legacy keystore still unlocks and reports status without loginEmail', () => {
     const wallet = createWallet();
 

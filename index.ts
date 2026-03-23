@@ -51,6 +51,17 @@ export type {
   NftItem,
   TokenPriceParams,
   TokenPriceItem,
+  AccelerateGuardian,
+  TransferSecurityCheckParams,
+  TransferSecurityCheckResult,
+  TransferLimitCheckParams,
+  TransferLimitCheckResult,
+  TransferPreflightParams,
+  TransferPreflightDecision,
+  TransferPreflightResult,
+  ManagerSyncCheckParams,
+  ManagerSyncCheckResult,
+  TransactionFeePreview,
   // Transfer
   TransferParams,
   CrossChainTransferParams,
@@ -63,6 +74,8 @@ export type {
   GuardianVerificationInfo,
   // Contract
   ManagerForwardCallParams,
+  RecoverAndSaveWalletParams,
+  RecoverAndSaveWalletResult,
   ViewMethodParams,
   TransactionResultParams,
   TransactionResult,
@@ -96,6 +109,13 @@ export {
   getTokenPrice,
 } from './src/core/assets.js';
 
+// --- Core: Security / Preflight ---
+export {
+  checkTransferSecurity,
+  checkTransferLimit,
+  transferPreflight,
+} from './src/core/security.js';
+
 // --- Core: Contract ---
 export {
   callContractViewMethod,
@@ -113,6 +133,7 @@ export {
   recoverWallet,
   checkRegisterOrRecoveryStatus,
 } from './src/core/auth.js';
+export { recoverAndSaveWallet } from './src/core/auth-session.js';
 
 // --- Core: Transfer (Phase 3) ---
 export {
@@ -120,6 +141,7 @@ export {
   crossChainTransfer,
   recoverStuckTransfer,
   getTransactionResult,
+  checkManagerSyncState,
 } from './src/core/transfer.js';
 
 // --- Core: Guardian (Phase 3) ---
@@ -139,6 +161,7 @@ export {
   listWalletProfiles,
   getWalletProfileByLoginEmail,
   clearKeystoreState,
+  resolveManagerWallet,
   createSignerFromCaWallet,
   resolveSignerContext,
   getActiveWallet,

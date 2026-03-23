@@ -17,6 +17,7 @@ import type {
 import { LoginTypeLabel, LoginType } from '../../lib/types.js';
 import { createHttpClient } from '../../lib/http.js';
 import { withPortkeyRecoveryHint } from '../../lib/error-hints.js';
+import { extractOperationTypeFromVerificationDoc, parseLoginType } from './guardian-approval.js';
 
 // ============================================================================
 // getVerifierServer
@@ -365,34 +366,4 @@ function validateRecoveryGuardiansApproved(
       type,
     };
   });
-}
-
-function parseLoginType(value: string | number, field: string): LoginType {
-  if (typeof value === 'number') {
-    if (LoginTypeLabel[value as LoginType]) return value as LoginType;
-    throw new Error(`${field} must be a valid login type number`);
-  }
-
-  const text = String(value || '').trim();
-  if (!text) throw new Error(`${field} is required`);
-
-  const numeric = Number(text);
-  if (!Number.isNaN(numeric) && LoginTypeLabel[numeric as LoginType]) {
-    return numeric as LoginType;
-  }
-
-  const byLabel = Object.entries(LoginTypeLabel).find(
-    ([, label]) => label.toLowerCase() === text.toLowerCase(),
-  );
-  if (byLabel) return Number(byLabel[0]) as LoginType;
-
-  throw new Error(`${field} must be a valid login type (e.g. 0 or "Email")`);
-}
-
-function extractOperationTypeFromVerificationDoc(verificationDoc: string): number | null {
-  const parts = verificationDoc.split(',');
-  if (parts.length < 6) return null;
-
-  const operationType = Number(parts[5]);
-  return Number.isFinite(operationType) ? operationType : null;
 }

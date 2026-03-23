@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { createHttpClient } from '../../lib/http';
+import { createHttpClient, HttpError } from '../../lib/http';
 import type { PortkeyConfig } from '../../lib/types';
 
 describe('lib/http', () => {
@@ -29,5 +29,16 @@ describe('lib/http', () => {
     });
     // The client should work without double slashes
     expect(client).toBeDefined();
+  });
+
+  it('should parse nested error bodies from Portkey APIs', () => {
+    const err = new HttpError(
+      403,
+      'Forbidden',
+      JSON.stringify({ error: { code: '3002', message: 'Guardian not exist.' } }),
+    );
+
+    expect(err.errorCode).toBe('3002');
+    expect(err.message).toContain('Guardian not exist.');
   });
 });

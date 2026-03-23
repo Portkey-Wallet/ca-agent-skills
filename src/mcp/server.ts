@@ -20,9 +20,11 @@ import {
 } from '../core/account.js';
 import { getTokenBalance, getTokenList, getNftCollections, getNftItems, getTokenPrice } from '../core/assets.js';
 import { getVerifierServer, sendVerificationCode, verifyCode, registerWallet, recoverWallet, checkRegisterOrRecoveryStatus } from '../core/auth.js';
+import { recoverAndSaveWallet } from '../core/auth-session.js';
 import { sameChainTransfer, crossChainTransfer, recoverStuckTransfer, getTransactionResult } from '../core/transfer.js';
 import { addGuardian, removeGuardian } from '../core/guardian.js';
 import { callContractViewMethod, managerForwardCallWithKey } from '../core/contract.js';
+import { transferPreflight } from '../core/security.js';
 import {
   saveKeystore,
   unlockWallet,
@@ -50,6 +52,8 @@ const server = new McpServer({
 const CHAIN_ID = z.enum(['AELF', 'tDVV']).describe('aelf chain ID');
 const NETWORK = z.literal('mainnet').default('mainnet').describe('Portkey network (mainnet only)');
 const LOGIN_EMAIL = z.string().email().describe('Login email associated with the CA account');
+const PASSWORD = z.string().min(1).describe('Keystore password for this operation');
+const KEYSTORE_FILE = z.string().describe('Absolute path to a CA keystore file');
 const JSON_PREVIEW_MAX_CHARS = 200;
 
 function ok(data: unknown) {
@@ -98,6 +102,7 @@ const READ_ONLY_TOOLS = new Set([
   'portkey_nft_items',
   'portkey_token_price',
   'portkey_tx_result',
+  'portkey_transfer_preflight',
   'portkey_view_call',
   'portkey_wallet_status',
   'portkey_list_wallet_profiles',
@@ -117,6 +122,7 @@ const NETWORK_WRITE_TOOLS = new Set([
   'portkey_verify_code',
   'portkey_register',
   'portkey_recover',
+  'portkey_recover_and_save',
   'portkey_transfer',
   'portkey_cross_chain_transfer',
   'portkey_recover_stuck_transfer',
@@ -192,6 +198,8 @@ const GuardianToRemoveSchema = z.object({
 const OPERATION_TYPE_MAP = {
   register: OperationType.CreateCAHolder,
   recovery: OperationType.SocialRecovery,
+  transferApprove: OperationType.GuardianApproveTransfer,
+  guardianApproveTransfer: OperationType.GuardianApproveTransfer,
   addGuardian: OperationType.AddGuardian,
   deleteGuardian: OperationType.RemoveGuardian,
 } as const;
@@ -309,7 +317,7 @@ server.registerTool(
       email: z.string().email().describe('Email address to send code to'),
       verifierId: z.string().describe('Verifier service ID from portkey_get_verifier'),
       chainId: CHAIN_ID.describe('Resolved chain ID from portkey_prepare_auth_flow'),
-      operationType: z.enum(['register', 'recovery', 'addGuardian', 'deleteGuardian']).describe('Operation requiring verification'),
+      operationType: z.enum(['register', 'recovery', 'transferApprove', 'guardianApproveTransfer', 'addGuardian', 'deleteGuardian']).describe('Operation requiring verification'),
       network: NETWORK,
     },
   },
@@ -335,7 +343,7 @@ server.registerTool(
       verifierId: z.string().describe('Verifier service ID'),
       verifierSessionId: z.string().describe('Session ID from portkey_send_code'),
       chainId: CHAIN_ID.describe('Resolved chain ID from portkey_prepare_auth_flow'),
-      operationType: z.enum(['register', 'recovery', 'addGuardian', 'deleteGuardian']).describe('Operation type'),
+      operationType: z.enum(['register', 'recovery', 'transferApprove', 'guardianApproveTransfer', 'addGuardian', 'deleteGuardian']).describe('Operation type'),
       network: NETWORK,
     },
   },
@@ -559,15 +567,22 @@ server.registerTool(
       to: z.string().describe('Recipient address'),
       amount: z.string().describe('Amount in smallest unit (e.g. 100000000 = 1 ELF)'),
       memo: z.string().optional().describe('Optional transfer memo'),
+      guardiansApproved: z.string().optional().describe('Optional JSON array of approved guardians for one-time transfer approval'),
       chainId: CHAIN_ID,
+      loginEmail: LOGIN_EMAIL.optional(),
+      password: PASSWORD.optional(),
+      keystoreFile: KEYSTORE_FILE.optional(),
       network: NETWORK,
     },
   },
-  async ({ caHash, tokenContractAddress, symbol, to, amount, memo, chainId, network }) => {
+  async ({ caHash, tokenContractAddress, symbol, to, amount, memo, guardiansApproved, chainId, loginEmail, password, keystoreFile, network }) => {
     try {
-      const wallet = requireWallet();
+      const wallet = requireWallet({ network, loginEmail, password, keystoreFile });
       return ok(await sameChainTransfer(getConfig({ network }), wallet, {
         caHash, tokenContractAddress, symbol, to, amount, memo, chainId,
+        guardiansApproved: guardiansApproved
+          ? parseJson(guardiansApproved, GuardianApprovedSchema, 'guardiansApproved')
+          : undefined,
       }));
     } catch (err) { return fail(err); }
   },
@@ -586,16 +601,23 @@ server.registerTool(
       symbol: z.string().describe('Token symbol'),
       to: z.string().describe('Recipient address on target chain'),
       amount: z.string().describe('Amount in smallest unit'),
+      guardiansApproved: z.string().optional().describe('Optional JSON array of approved guardians for one-time transfer approval'),
       toChainId: CHAIN_ID.describe('Target chain ID'),
       chainId: CHAIN_ID.describe('Source chain ID'),
+      loginEmail: LOGIN_EMAIL.optional(),
+      password: PASSWORD.optional(),
+      keystoreFile: KEYSTORE_FILE.optional(),
       network: NETWORK,
     },
   },
-  async ({ caHash, tokenContractAddress, symbol, to, amount, toChainId, chainId, network }) => {
+  async ({ caHash, tokenContractAddress, symbol, to, amount, guardiansApproved, toChainId, chainId, loginEmail, password, keystoreFile, network }) => {
     try {
-      const wallet = requireWallet();
+      const wallet = requireWallet({ network, loginEmail, password, keystoreFile });
       return ok(await crossChainTransfer(getConfig({ network }), wallet, {
         caHash, tokenContractAddress, symbol, to, amount, toChainId, chainId,
+        guardiansApproved: guardiansApproved
+          ? parseJson(guardiansApproved, GuardianApprovedSchema, 'guardiansApproved')
+          : undefined,
       }));
     } catch (err) { return fail(err); }
   },
@@ -622,7 +644,36 @@ server.registerTool(
 );
 
 // ---------------------------------------------------------------------------
-// 19. portkey_recover_stuck_transfer
+// 19. portkey_transfer_preflight
+// ---------------------------------------------------------------------------
+server.registerTool(
+  'portkey_transfer_preflight',
+  {
+    description: 'Run the CA app transfer preflight checks. Returns whether the transfer can proceed directly, needs one-time approval, needs transfer-limit modification, or is blocked by wallet security.',
+    inputSchema: {
+      caHash: z.string().describe('CA hash'),
+      caAddress: z.string().describe('CA address on the transfer chain'),
+      symbol: z.string().describe('Token symbol'),
+      amount: z.string().describe('Amount in smallest unit'),
+      chainId: CHAIN_ID.describe('Transfer chain ID'),
+      network: NETWORK,
+    },
+  },
+  async ({ caHash, caAddress, symbol, amount, chainId, network }) => {
+    try {
+      return ok(await transferPreflight(getConfig({ network }), {
+        caHash,
+        caAddress,
+        symbol,
+        amount,
+        chainId,
+      }));
+    } catch (err) { return fail(err); }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 20. portkey_recover_stuck_transfer
 // ---------------------------------------------------------------------------
 server.registerTool(
   'portkey_recover_stuck_transfer',
@@ -635,12 +686,15 @@ server.registerTool(
       caAddress: z.string().describe('CA address to recover tokens to'),
       chainId: CHAIN_ID,
       memo: z.string().optional().describe('Optional memo'),
+      loginEmail: LOGIN_EMAIL.optional(),
+      password: PASSWORD.optional(),
+      keystoreFile: KEYSTORE_FILE.optional(),
       network: NETWORK,
     },
   },
-  async ({ tokenContractAddress, symbol, amount, caAddress, chainId, memo, network }) => {
+  async ({ tokenContractAddress, symbol, amount, caAddress, chainId, memo, loginEmail, password, keystoreFile, network }) => {
     try {
-      const wallet = requireWallet();
+      const wallet = requireWallet({ network, loginEmail, password, keystoreFile });
       return ok(await recoverStuckTransfer(getConfig({ network }), wallet, {
         tokenContractAddress, symbol, amount, caAddress, chainId, memo,
       }));
@@ -649,7 +703,7 @@ server.registerTool(
 );
 
 // ---------------------------------------------------------------------------
-// 20. portkey_add_guardian
+// 21. portkey_add_guardian
 // ---------------------------------------------------------------------------
 server.registerTool(
   'portkey_add_guardian',
@@ -660,12 +714,15 @@ server.registerTool(
       guardianToAdd: z.string().describe('JSON: { identifierHash, type (0=Email), verificationInfo: { id, signature, verificationDoc } }'),
       guardiansApproved: z.string().describe('JSON array of approved guardians'),
       chainId: CHAIN_ID,
+      loginEmail: LOGIN_EMAIL.optional(),
+      password: PASSWORD.optional(),
+      keystoreFile: KEYSTORE_FILE.optional(),
       network: NETWORK,
     },
   },
-  async ({ caHash, guardianToAdd, guardiansApproved, chainId, network }) => {
+  async ({ caHash, guardianToAdd, guardiansApproved, chainId, loginEmail, password, keystoreFile, network }) => {
     try {
-      const wallet = requireWallet();
+      const wallet = requireWallet({ network, loginEmail, password, keystoreFile });
       return ok(await addGuardian(getConfig({ network }), wallet, {
         caHash,
         guardianToAdd: parseJson(guardianToAdd, GuardianToAddSchema, 'guardianToAdd'),
@@ -681,7 +738,7 @@ server.registerTool(
 );
 
 // ---------------------------------------------------------------------------
-// 21. portkey_remove_guardian
+// 22. portkey_remove_guardian
 // ---------------------------------------------------------------------------
 server.registerTool(
   'portkey_remove_guardian',
@@ -692,12 +749,15 @@ server.registerTool(
       guardianToRemove: z.string().describe('JSON: { identifierHash, type (0=Email), verificationInfo: { id } }'),
       guardiansApproved: z.string().describe('JSON array of approved guardians'),
       chainId: CHAIN_ID,
+      loginEmail: LOGIN_EMAIL.optional(),
+      password: PASSWORD.optional(),
+      keystoreFile: KEYSTORE_FILE.optional(),
       network: NETWORK,
     },
   },
-  async ({ caHash, guardianToRemove, guardiansApproved, chainId, network }) => {
+  async ({ caHash, guardianToRemove, guardiansApproved, chainId, loginEmail, password, keystoreFile, network }) => {
     try {
-      const wallet = requireWallet();
+      const wallet = requireWallet({ network, loginEmail, password, keystoreFile });
       return ok(await removeGuardian(getConfig({ network }), wallet, {
         caHash,
         guardianToRemove: parseJson(guardianToRemove, GuardianToRemoveSchema, 'guardianToRemove'),
@@ -713,7 +773,7 @@ server.registerTool(
 );
 
 // ---------------------------------------------------------------------------
-// 22. portkey_forward_call
+// 23. portkey_forward_call
 // ---------------------------------------------------------------------------
 server.registerTool(
   'portkey_forward_call',
@@ -724,24 +784,35 @@ server.registerTool(
       contractAddress: z.string().describe('Target contract address'),
       methodName: z.string().describe('Target method name'),
       args: z.string().describe('JSON object of method arguments'),
+      guardiansApproved: z.string().optional().describe('Optional JSON array of approved guardians for transfer-related calls'),
       chainId: CHAIN_ID,
+      loginEmail: LOGIN_EMAIL.optional(),
+      password: PASSWORD.optional(),
+      keystoreFile: KEYSTORE_FILE.optional(),
       network: NETWORK,
     },
   },
-  async ({ caHash, contractAddress, methodName, args, chainId, network }) => {
+  async ({ caHash, contractAddress, methodName, args, guardiansApproved, chainId, loginEmail, password, keystoreFile, network }) => {
     try {
-      const wallet = requireWallet();
+      const wallet = requireWallet({ network, loginEmail, password, keystoreFile });
       let parsedArgs: Record<string, unknown>;
       try { parsedArgs = JSON.parse(args); } catch { throw new SkillError('INVALID_PARAMS', `Invalid JSON for "args": ${args.slice(0, JSON_PREVIEW_MAX_CHARS)}`); }
       return ok(await managerForwardCallWithKey(getConfig({ network }), wallet.privateKey, {
-        caHash, contractAddress, methodName, args: parsedArgs, chainId,
+        caHash,
+        contractAddress,
+        methodName,
+        args: parsedArgs,
+        chainId,
+        guardiansApproved: guardiansApproved
+          ? parseJson(guardiansApproved, GuardianApprovedSchema, 'guardiansApproved')
+          : undefined,
       }));
     } catch (err) { return fail(err); }
   },
 );
 
 // ---------------------------------------------------------------------------
-// 23. portkey_view_call
+// 24. portkey_view_call
 // ---------------------------------------------------------------------------
 server.registerTool(
   'portkey_view_call',
@@ -826,12 +897,51 @@ server.registerTool(
     inputSchema: {
       password: z.string().min(1).describe('Keystore password'),
       loginEmail: LOGIN_EMAIL.optional(),
+      keystoreFile: KEYSTORE_FILE.optional(),
       network: NETWORK,
     },
   },
-  async ({ password, loginEmail, network }) => {
+  async ({ password, loginEmail, keystoreFile, network }) => {
     try {
-      return ok(unlockWallet(password, network || 'mainnet', loginEmail));
+      return ok(unlockWallet(password, network || 'mainnet', loginEmail, keystoreFile));
+    } catch (err) { return fail(err); }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 26b. portkey_recover_and_save
+// ---------------------------------------------------------------------------
+server.registerTool(
+  'portkey_recover_and_save',
+  {
+    description: 'Recover an existing CA wallet, wait for pass status, and immediately save the new manager to a local encrypted keystore. Use this when you want a reusable signer instead of a one-off recovery session.',
+    inputSchema: {
+      email: z.string().email().describe('Email address to recover'),
+      guardiansApproved: z.string().describe('JSON array of approved guardians'),
+      chainId: CHAIN_ID.describe('Resolved chain ID from portkey_prepare_auth_flow'),
+      password: PASSWORD,
+      loginEmail: LOGIN_EMAIL.optional(),
+      maxStatusChecks: z.number().int().positive().optional().describe('Optional max status polling attempts'),
+      statusCheckDelayMs: z.number().int().positive().optional().describe('Optional delay between status polling attempts in milliseconds'),
+      network: NETWORK,
+    },
+  },
+  async ({ email, guardiansApproved, chainId, password, loginEmail, maxStatusChecks, statusCheckDelayMs, network }) => {
+    try {
+      return ok(await recoverAndSaveWallet(getConfig({ network }), {
+        email,
+        guardiansApproved: parseJson(
+          guardiansApproved,
+          RecoveryGuardianApprovedSchema,
+          'guardiansApproved',
+        ),
+        chainId,
+        password,
+        loginEmail,
+        network,
+        maxStatusChecks,
+        statusCheckDelayMs,
+      }));
     } catch (err) { return fail(err); }
   },
 );

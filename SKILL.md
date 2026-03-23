@@ -1,6 +1,6 @@
 ---
 name: "portkey-ca-agent-skills"
-version: "2.1.0"
+version: "2.2.0"
 description: "Portkey CA wallet registration/auth/guardian/transfer operations for agents."
 activation:
   keywords:
@@ -33,7 +33,7 @@ activation:
 
 ## Capabilities
 - Auth operations: verifier, email code, register, recover, status
-- Query operations: account, guardian, assets, chain config
+- Query operations: account, guardian, assets, chain config, transfer preflight
 - Tx operations: transfer, contract call, approvals, keystore workflows
 - Shared wallet context: auto-set active CA profile for cross-skill signer resolution
 - Supports SDK, CLI, MCP, OpenClaw, and IronClaw integration from one codebase.
@@ -41,11 +41,28 @@ activation:
 ## Safe usage rules
 - Never print private keys, mnemonics, or tokens in channel outputs.
 - For write operations, require explicit user confirmation and validate parameters before sending transactions.
-- Prefer `simulate` or read-only queries first when available.
+- Prefer read-only preflight checks first when available.
+- Treat backend `3002 / Guardian not exist.` as an unregistered account and route to `register`.
+- Before `transfer` / `cross-chain-transfer`, run `transfer-preflight` to decide whether the path is:
+  - direct transfer
+  - one-time guardian approval
+  - transfer-limit modification
+  - wallet security upgrade / guardian sync
+- Recommended stable write path is:
+  - `recover-and-save`
+  - wait for manager sync on target chain
+  - collect fresh `transferApprove` proofs
+  - submit `transfer` / `cross-chain-transfer` with `loginEmail + password`
+- `transfer-preflight` reports both the transferred asset balance and the chain default fee-token balance (`feeSymbol` / `feeBalance` / `feeDecimals`) when deciding one-time approval eligibility.
+- `send-code` / `verify-code` support `transferApprove` for one-time transfer approval proof collection.
+- `transfer`, `cross-chain-transfer`, and transfer-related `forward-call` accept optional `guardiansApproved`.
+- `transfer` / `cross-chain-transfer` now block early when the current manager has not yet synced to the target chain.
+- CLI write commands can resolve signer directly from CA keystore options (`loginEmail` / `password` / `keystoreFile`) instead of relying on a previous in-memory `unlock`.
 
 ## Command recipes
 - Start MCP server: `bun run mcp`
 - Run CLI entry: `bun run portkey_query_skill.ts chain-info`
+- Run transfer preflight: `bun run portkey_query_skill.ts transfer-preflight --ca-hash <hash> --ca-address <addr> --chain-id tDVV --symbol ELF --amount 100000000`
 - Read active wallet context: `portkey_get_active_wallet`
 - Set active wallet context: `portkey_set_active_wallet`
 - Install into IronClaw: `bun run setup ironclaw`

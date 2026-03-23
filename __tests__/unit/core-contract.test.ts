@@ -124,6 +124,29 @@ describe('core/contract', () => {
       expect(encoded.encodedInput).toBe('0xencoded');
       return { transactionId: 'tx-forward', data: { Status: 'MINED' } };
     };
+    coreMockState.calculateTransactionFeeImpl = async (
+      rpcUrl: string,
+      caContractAddress: string,
+      _wallet: any,
+      method: string,
+      payload: any,
+    ) => {
+      expect(rpcUrl).toBe('https://rpc');
+      expect(caContractAddress).toBe('CA_CONTRACT');
+      expect(method).toBe('ManagerForwardCall');
+      expect(payload.encodedInput).toBe('0xencoded');
+      return {
+        transactionFee: { ELF: '1000000' },
+        transactionFees: {
+          ChargingAddress: 'ELF_fee_payer',
+          Fee: { ELF: '1000000' },
+        },
+        chargingAddress: 'ELF_fee_payer',
+        isCaPayingFee: null,
+        feeSymbol: 'ELF',
+        feeAmount: '1000000',
+      };
+    };
 
     const result = await contract.managerForwardCall(config, wallet, {
       caHash: 'hash',
@@ -134,6 +157,47 @@ describe('core/contract', () => {
     });
 
     expect(result.transactionId).toBe('tx-forward');
+    expect(result.feePreview?.feeAmount).toBe('1000000');
+    expect(result.feePreview?.chargingAddress).toBe('ELF_fee_payer');
+  });
+
+  test('managerForwardCall forwards one-time approval guardians for transfer calls', async () => {
+    const wallet = { address: 'ELF_wallet', privateKey: 'pk' } as any;
+
+    coreMockState.encodeManagerForwardCallParamsImpl = async () => ({ encodedInput: '0xencoded' });
+    coreMockState.callSendMethodImpl = async (
+      _rpc: string,
+      _caContractAddress: string,
+      _wallet: any,
+      method: string,
+      payload: any,
+    ) => {
+      expect(method).toBe('ManagerForwardCall');
+      expect(payload.guardiansApproved).toHaveLength(1);
+      expect(payload.guardiansApproved[0].identifierHash).toBe('identifierHashFromDoc');
+      expect(payload.guardiansApproved[0].verificationInfo.id).toBe('v-transfer');
+      expect(Buffer.isBuffer(payload.guardiansApproved[0].verificationInfo.signature)).toBe(true);
+      return { transactionId: 'tx-guardian', data: { Status: 'MINED' } };
+    };
+
+    const result = await contract.managerForwardCall(config, wallet, {
+      caHash: 'hash',
+      contractAddress: 'TOKEN',
+      methodName: 'Transfer',
+      args: { to: 'ELF_to', symbol: 'ELF', amount: '1' },
+      chainId: 'tDVV',
+      guardiansApproved: [
+        {
+          identifier: 'proof@example.com',
+          type: 0,
+          verifierId: 'v-transfer',
+          verificationDoc: '0,identifierHashFromDoc,1,2,3,10,1866392',
+          signature: 'abcd',
+        },
+      ],
+    });
+
+    expect(result.transactionId).toBe('tx-guardian');
   });
 
   test('managerForwardCallWithKey builds wallet and forwards call', async () => {

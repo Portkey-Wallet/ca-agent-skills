@@ -31,22 +31,29 @@ export class HttpError extends Error {
   responseBody: string;
 
   constructor(statusCode: number, statusText: string, body: string) {
-    // Try to extract API error code and message from JSON body
-    let errorCode: string | null = null;
-    let apiMessage = '';
-    try {
-      const parsed = JSON.parse(body);
-      errorCode = parsed?.code ?? parsed?.Code ?? null;
-      apiMessage = parsed?.message ?? parsed?.Message ?? '';
-    } catch {
-      apiMessage = body;
-    }
+    const { errorCode, apiMessage } = extractApiError(body);
 
     super(`HTTP ${statusCode} ${statusText}: ${apiMessage || body}`);
     this.name = 'HttpError';
     this.statusCode = statusCode;
     this.errorCode = errorCode;
     this.responseBody = body;
+  }
+}
+
+function extractApiError(body: string): { errorCode: string | null; apiMessage: string } {
+  try {
+    const parsed = JSON.parse(body);
+    const nested = parsed?.error && typeof parsed.error === 'object' ? parsed.error : null;
+    return {
+      errorCode: nested?.code ?? nested?.Code ?? parsed?.code ?? parsed?.Code ?? null,
+      apiMessage: nested?.message ?? nested?.Message ?? parsed?.message ?? parsed?.Message ?? '',
+    };
+  } catch {
+    return {
+      errorCode: null,
+      apiMessage: body,
+    };
   }
 }
 
