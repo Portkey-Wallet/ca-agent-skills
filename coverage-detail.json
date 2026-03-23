@@ -3,9 +3,9 @@
   "coverageModel": "bun-text-all-files-by-file-average",
   "byFileAverage": {
     "lines": {
-      "total": 19,
-      "covered": 19,
-      "pct": 90.2862100334816
+      "total": 22,
+      "covered": 22,
+      "pct": 90.96567290959051
     },
     "functions": {
       "total": 0,
@@ -20,9 +20,9 @@
   },
   "weighted": {
     "lines": {
-      "total": 2065,
-      "covered": 1906,
-      "pct": 92.3002421307506
+      "total": 2563,
+      "covered": 2366,
+      "pct": 92.31369488880219
     },
     "functions": {
       "total": 0,
@@ -39,9 +39,9 @@
     {
       "file": "__tests__/unit/core-mock-state.ts",
       "lines": {
-        "total": 120,
-        "covered": 109,
-        "pct": 90.83333333333333
+        "total": 134,
+        "covered": 123,
+        "pct": 91.7910447761194
       },
       "functions": {
         "total": 0,
@@ -93,8 +93,8 @@
     {
       "file": "index.ts",
       "lines": {
-        "total": 13,
-        "covered": 13,
+        "total": 15,
+        "covered": 15,
         "pct": 100
       },
       "functions": {
@@ -201,9 +201,9 @@
     {
       "file": "src/core/account.ts",
       "lines": {
-        "total": 136,
-        "covered": 135,
-        "pct": 99.26470588235294
+        "total": 137,
+        "covered": 136,
+        "pct": 99.27007299270073
       },
       "functions": {
         "total": 0,
@@ -235,11 +235,29 @@
       }
     },
     {
+      "file": "src/core/auth-session.ts",
+      "lines": {
+        "total": 77,
+        "covered": 66,
+        "pct": 85.71428571428571
+      },
+      "functions": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      },
+      "branches": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      }
+    },
+    {
       "file": "src/core/auth.ts",
       "lines": {
-        "total": 239,
-        "covered": 230,
-        "pct": 96.23430962343096
+        "total": 219,
+        "covered": 213,
+        "pct": 97.26027397260275
       },
       "functions": {
         "total": 0,
@@ -255,9 +273,9 @@
     {
       "file": "src/core/contract.ts",
       "lines": {
-        "total": 59,
-        "covered": 59,
-        "pct": 100
+        "total": 80,
+        "covered": 79,
+        "pct": 98.75
       },
       "functions": {
         "total": 0,
@@ -276,6 +294,24 @@
         "total": 8,
         "covered": 3,
         "pct": 37.5
+      },
+      "functions": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      },
+      "branches": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      }
+    },
+    {
+      "file": "src/core/guardian-approval.ts",
+      "lines": {
+        "total": 86,
+        "covered": 75,
+        "pct": 87.20930232558139
       },
       "functions": {
         "total": 0,
@@ -309,9 +345,27 @@
     {
       "file": "src/core/keystore.ts",
       "lines": {
-        "total": 391,
-        "covered": 362,
-        "pct": 92.58312020460357
+        "total": 511,
+        "covered": 464,
+        "pct": 90.8023483365949
+      },
+      "functions": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      },
+      "branches": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      }
+    },
+    {
+      "file": "src/core/security.ts",
+      "lines": {
+        "total": 173,
+        "covered": 167,
+        "pct": 96.53179190751445
       },
       "functions": {
         "total": 0,
@@ -327,9 +381,9 @@
     {
       "file": "src/core/transfer.ts",
       "lines": {
-        "total": 126,
-        "covered": 126,
-        "pct": 100
+        "total": 180,
+        "covered": 179,
+        "pct": 99.44444444444444
       },
       "functions": {
         "total": 0,
@@ -363,9 +417,9 @@
     {
       "file": "src/mcp/require-wallet.ts",
       "lines": {
-        "total": 39,
-        "covered": 32,
-        "pct": 82.05128205128204
+        "total": 9,
+        "covered": 9,
+        "pct": 100
       },
       "functions": {
         "total": 0,
