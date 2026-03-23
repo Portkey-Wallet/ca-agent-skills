@@ -1,6 +1,6 @@
 ---
 name: "portkey-ca-agent-skills"
-version: "2.1.0"
+version: "2.2.0"
 description: "Portkey CA wallet registration/auth/guardian/transfer operations for agents."
 activation:
   keywords:
