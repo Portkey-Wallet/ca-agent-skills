@@ -375,8 +375,107 @@ export interface TokenPriceItem {
 }
 
 // ============================================================================
+// Transfer Security / Preflight
+// ============================================================================
+
+export interface AccelerateGuardian {
+  type: LoginType | number | string;
+  verifierId: string;
+  identifierHash: string;
+  salt: string;
+  isLoginAccount: boolean;
+  transactionId: string;
+  chainId: ChainId;
+}
+
+export interface TransferSecurityCheckParams {
+  caHash: string;
+  chainId: ChainId;
+}
+
+export interface TransferSecurityCheckResult {
+  isTransferSafe: boolean;
+  isSynchronizing: boolean;
+  isOriginChainSafe: boolean;
+  accelerateGuardians: AccelerateGuardian[];
+}
+
+export interface TransferLimitCheckParams {
+  caHash: string;
+  caAddress: string;
+  symbol: string;
+  amount: string;
+  chainId: ChainId;
+}
+
+export interface TransferLimitCheckResult {
+  symbol: string;
+  chainId: ChainId;
+  amount: string;
+  balance: string;
+  decimals: number;
+  tokenContractAddress: string;
+  feeSymbol: string;
+  feeBalance: string;
+  feeDecimals: number;
+  feeTokenContractAddress: string;
+  dailyLimit: string | null;
+  dailyBalance: string | null;
+  singleLimit: string | null;
+  defaultDailyLimit: string | null;
+  defaultSingleLimit: string | null;
+  isDailyLimited: boolean;
+  isSingleLimited: boolean;
+  canApprove: boolean;
+  feeBuffer: string;
+}
+
+export type TransferPreflightDecision =
+  | 'direct_transfer'
+  | 'needs_add_guardian'
+  | 'needs_security_sync'
+  | 'needs_one_time_approval'
+  | 'needs_limit_modification';
+
+export interface TransferPreflightParams extends TransferLimitCheckParams {}
+
+export interface TransferPreflightResult {
+  decision: TransferPreflightDecision;
+  reason: string;
+  walletSecurity: TransferSecurityCheckResult;
+  transferLimit?: TransferLimitCheckResult;
+}
+
+// ============================================================================
 // Transfer
 // ============================================================================
+
+export interface ManagerSyncCheckParams {
+  /** CA hash */
+  caHash: string;
+  /** Chain ID where the CA write operation will be sent */
+  chainId: ChainId;
+  /** Manager wallet address */
+  managerAddress: string;
+}
+
+export interface ManagerSyncCheckResult {
+  caHash: string;
+  chainId: ChainId;
+  managerAddress: string;
+  caAddress: string;
+  isManagerSynced: boolean;
+  managerInfos: ManagerInfo[];
+}
+
+export interface TransactionFeePreview {
+  transactionFee: Record<string, string> | null;
+  transactionFees: Record<string, unknown> | null;
+  chargingAddress: string | null;
+  isCaPayingFee: boolean | null;
+  feeSymbol: string | null;
+  feeAmount: string | null;
+}
 
 export interface TransferParams {
   /** CA hash */
@@ -393,6 +492,8 @@ export interface TransferParams {
   memo?: string;
   /** Chain ID where the transfer happens */
   chainId: ChainId;
+  /** Optional guardian approvals for one-time transfer approval */
+  guardiansApproved?: ApprovedGuardian[];
 }
 
 export interface CrossChainTransferParams extends TransferParams {
@@ -405,6 +506,7 @@ export interface CrossChainTransferParams extends TransferParams {
 export interface TransferResult {
   transactionId: string;
   status: string;
+  feePreview?: TransactionFeePreview;
 }
 
 // ============================================================================
@@ -455,6 +557,31 @@ export interface ManagerForwardCallParams {
   methodName: string;
   args: Record<string, unknown>;
   chainId: ChainId;
+  /** Optional guardian approvals for transfer-related ManagerForwardCall flows */
+  guardiansApproved?: ApprovedGuardian[];
+}
+
+export interface RecoverAndSaveWalletParams {
+  email: string;
+  guardiansApproved: RecoveryApprovedGuardian[];
+  chainId: ChainId;
+  password: string;
+  network: NetworkType;
+  loginEmail?: string;
+  extraData?: string;
+  maxStatusChecks?: number;
+  statusCheckDelayMs?: number;
+}
+
+export interface RecoverAndSaveWalletResult {
+  sessionId: string;
+  status: 'pass';
+  caAddress: string;
+  caHash: string;
+  keystorePath: string;
+  managerAddress: string;
+  originChainId: ChainId;
+  loginEmail: string | null;
 }
 
 export interface ViewMethodParams {

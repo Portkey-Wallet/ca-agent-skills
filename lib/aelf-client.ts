@@ -1,5 +1,5 @@
 import AElf from 'aelf-sdk';
-import type { WalletInfo, TransactionResult } from './types.js';
+import type { TransactionFeePreview, WalletInfo, TransactionResult } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Types (aelf-sdk does not ship clean TS types, see ./aelf-sdk.d.ts)
@@ -129,7 +129,7 @@ export async function callSendMethod(
 
   if (sendResult && typeof sendResult === 'object' && 'error' in sendResult && sendResult.error) {
     throw new Error(
-      `Send call ${methodName} failed: ${JSON.stringify(sendResult.error)}`,
+      `Send call ${methodName} failed${txId ? ` (txId=${txId})` : ''}: ${JSON.stringify(sendResult.error)}`,
     );
   }
 
@@ -141,6 +141,57 @@ export async function callSendMethod(
   await sleep(1000);
   const txResult = await getTxResult(rpcUrl, txId);
   return { transactionId: txId, data: txResult };
+}
+
+/** Calculate transaction fee for a signed contract method call without broadcasting it. */
+export async function calculateTransactionFee(
+  rpcUrl: string,
+  contractAddress: string,
+  wallet: AElfWallet,
+  methodName: string,
+  params: Record<string, unknown>,
+): Promise<TransactionFeePreview> {
+  const contract = await getContractInstance(rpcUrl, contractAddress, wallet);
+  const method = contract[methodName] as
+    | ((...args: unknown[]) => unknown)
+    | { getSignedTx?: (...args: unknown[]) => string }
+    | undefined;
+
+  if (!method || typeof (method as { getSignedTx?: unknown }).getSignedTx !== 'function') {
+    throw new Error(`Contract method "${methodName}" not found at ${contractAddress}`);
+  }
+
+  const rawTransaction = (method as { getSignedTx: (...args: unknown[]) => string }).getSignedTx(
+    params,
+    { sync: true },
+  );
+  const instance = getAelfInstance(rpcUrl);
+  const result = await (instance.chain as unknown as {
+    calculateTransactionFee: (rawTransaction: string) => Promise<Record<string, unknown>>;
+  }).calculateTransactionFee(rawTransaction);
+
+  if (result && typeof result === 'object' && 'error' in result && result.error) {
+    throw new Error(`calculateTransactionFee ${methodName} failed: ${JSON.stringify(result.error)}`);
+  }
+
+  const transactionFee = asStringRecord(result.TransactionFee);
+  const transactionFees = asRecord(result.TransactionFees);
+  const chargingAddress = transactionFees && typeof transactionFees.ChargingAddress === 'string'
+    ? transactionFees.ChargingAddress
+    : null;
+  const feeMap = transactionFees && isRecord(transactionFees.Fee)
+    ? asStringRecord(transactionFees.Fee)
+    : transactionFee;
+  const [feeSymbol, feeAmount] = feeMap ? Object.entries(feeMap)[0] || [null, null] : [null, null];
+
+  return {
+    transactionFee,
+    transactionFees,
+    chargingAddress,
+    isCaPayingFee: null,
+    feeSymbol: feeSymbol ?? null,
+    feeAmount: feeAmount ?? null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -250,25 +301,51 @@ export async function getTxResult(
   maxRetries = TX_RESULT_MAX_RETRIES,
 ): Promise<TransactionResult> {
   const instance = getAelfInstance(rpcUrl);
+  let retryCount = 0;
+  let lastStatus = 'UNKNOWN';
+  let lastError = '';
+  let lastRpcError = '';
 
-  for (let i = 0; i < maxRetries; i++) {
+  while (retryCount <= maxRetries) {
     try {
-      const result = await instance.chain.getTxResult(txId);
-      if (result.Status === 'MINED' || result.Status === 'FAILED') {
-        if (result.Status === 'FAILED') {
-          throw new Error(`Transaction ${txId} FAILED: ${result.Error || 'Unknown error'}`);
-        }
-        return result as TransactionResult;
+      const result = await instance.chain.getTxResult(txId) as TransactionResult;
+      const status = String(result?.Status || '').toUpperCase();
+      lastStatus = status || lastStatus;
+      lastError = String(result?.Error || '').trim();
+
+      if (status === 'MINED') {
+        return result;
       }
+
+      if (
+        status === 'NOTEXISTED' ||
+        status === 'PENDING' ||
+        status === 'PENDING_VALIDATION'
+      ) {
+        if (retryCount >= maxRetries) {
+          throw new Error(formatTxResultError(txId, lastStatus, lastError));
+        }
+        retryCount += 1;
+        await sleep(TX_RESULT_RETRY_DELAY);
+        continue;
+      }
+
+      throw new Error(formatTxResultError(txId, lastStatus, lastError));
     } catch (err: unknown) {
-      // If the error is our own FAILED error, re-throw
-      if (err instanceof Error && err.message.includes('FAILED')) throw err;
-      // Otherwise it might be "not found yet", keep retrying
+      if (err instanceof Error && err.message.startsWith(`Transaction ${txId}`)) {
+        throw err;
+      }
+
+      lastRpcError = err instanceof Error ? err.message : String(err);
+      if (retryCount >= maxRetries) {
+        throw new Error(formatTxResultError(txId, lastStatus, lastError, lastRpcError));
+      }
+      retryCount += 1;
+      await sleep(TX_RESULT_RETRY_DELAY);
     }
-    await sleep(TX_RESULT_RETRY_DELAY);
   }
 
-  throw new Error(`Transaction ${txId} not confirmed after ${maxRetries} retries`);
+  throw new Error(formatTxResultError(txId, lastStatus, lastError, lastRpcError));
 }
 
 // ---------------------------------------------------------------------------
@@ -277,6 +354,35 @@ export async function getTxResult(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatTxResultError(
+  txId: string,
+  status: string,
+  error?: string,
+  rpcError?: string,
+): string {
+  const detail = error || rpcError || 'Unknown error';
+  if (detail && detail !== 'Unknown error') {
+    return `Transaction ${txId} ${status}: ${detail}`;
+  }
+  return `Transaction ${txId} ${status}`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return isRecord(value) ? value : null;
+}
+
+function asStringRecord(value: unknown): Record<string, string> | null {
+  if (!isRecord(value)) return null;
+  const entries = Object.entries(value)
+    .filter(([, item]) => item !== undefined && item !== null)
+    .map(([key, item]) => [key, String(item)]);
+  return Object.fromEntries(entries);
 }
 
 /** Clear all caches (useful for testing). */

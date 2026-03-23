@@ -102,6 +102,23 @@ describe('core/account', () => {
     expect(result).toEqual({ isRegistered: false, originChainId: null });
   });
 
+  test('checkAccount handles nested 403 error.code=3002 as not registered', async () => {
+    coreMockState.httpGetImpl = async () => {
+      throw new MockHttpError(
+        403,
+        'Forbidden',
+        JSON.stringify({ error: { code: '3002', message: 'Guardian not exist.' } }),
+      );
+    };
+
+    const result = await account.checkAccount(
+      TEST_CONFIG,
+      { email: 'nested@example.com' },
+    );
+
+    expect(result).toEqual({ isRegistered: false, originChainId: null });
+  });
+
   test('checkAccount handles legacy message fallback', async () => {
     coreMockState.httpGetImpl = async () => {
       throw new Error('account not exist 3002');

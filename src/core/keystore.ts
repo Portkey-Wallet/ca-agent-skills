@@ -111,6 +111,20 @@ export interface KeystoreLocatorInput {
   keystoreFile?: string;
 }
 
+export interface ResolveManagerWalletInput extends KeystoreLocatorInput {
+  password?: string;
+  privateKey?: string;
+}
+
+export interface ResolveManagerWalletResult {
+  wallet: AElfWallet;
+  source: 'unlocked' | 'explicit' | 'env' | 'ca-keystore';
+  caHash: string | null;
+  caAddress: string | null;
+  loginEmail: string | null;
+  originChainId: ChainId | null;
+}
+
 // ---------------------------------------------------------------------------
 // In-memory state
 // ---------------------------------------------------------------------------
@@ -214,6 +228,22 @@ function getActiveKeystorePath(): string | undefined {
   if (unlocked) return unlocked;
   const active = getActiveWalletProfile();
   return active?.source === 'ca-keystore' ? active.keystoreFile : undefined;
+}
+
+function matchesRequestedUnlockedWallet(
+  network: NetworkType,
+  loginEmail?: string,
+  keystoreFile?: string,
+): boolean {
+  if (!unlockedState) return false;
+  if (!loginEmail && !keystoreFile) return true;
+
+  const requested = resolveKeystorePath({
+    network,
+    loginEmail,
+    keystoreFile,
+  });
+  return isSamePath(unlockedState.keystorePath, requested);
 }
 
 function loadWalletProfileSummary(
@@ -461,6 +491,123 @@ export function getWalletStatus(network: string, loginEmail?: string): WalletSta
  */
 export function getUnlockedWallet(): UnlockedWalletState | null {
   return unlockedState;
+}
+
+export function resolveManagerWallet(
+  input: ResolveManagerWalletInput = { network: 'mainnet' },
+): ResolveManagerWalletResult {
+  const resolvedNetwork = assertAllowedNetwork(input.network || 'mainnet');
+
+  if (matchesRequestedUnlockedWallet(resolvedNetwork, input.loginEmail, input.keystoreFile)) {
+    return {
+      wallet: unlockedState!.wallet,
+      source: 'unlocked',
+      caHash: unlockedState!.caHash,
+      caAddress: unlockedState!.caAddress,
+      loginEmail: unlockedState!.loginEmail || null,
+      originChainId: unlockedState!.originChainId,
+    };
+  }
+
+  if (input.privateKey) {
+    const wallet = getWalletByPrivateKey(input.privateKey);
+    return {
+      wallet,
+      source: 'explicit',
+      caHash: null,
+      caAddress: null,
+      loginEmail: null,
+      originChainId: null,
+    };
+  }
+
+  const directKeystoreRequest = Boolean(input.password || input.loginEmail || input.keystoreFile);
+  if (directKeystoreRequest) {
+    const password = input.password || process.env.PORTKEY_CA_KEYSTORE_PASSWORD;
+    if (!password) {
+      throw new Error(
+        formatSignerError(
+          SIGNER_ERROR_CODES.PASSWORD_REQUIRED,
+          'password is required for CA keystore access (set PORTKEY_CA_KEYSTORE_PASSWORD or pass password)',
+        ),
+      );
+    }
+
+    const unlocked = unlockWallet(password, resolvedNetwork, input.loginEmail, input.keystoreFile);
+    const wallet = getUnlockedWallet();
+    if (!wallet) {
+      throw new Error(
+        formatSignerError(
+          SIGNER_ERROR_CODES.CONTEXT_INVALID,
+          'failed to unlock requested CA keystore',
+        ),
+      );
+    }
+    return {
+      wallet: wallet.wallet,
+      source: 'ca-keystore',
+      caHash: unlocked.caHash,
+      caAddress: unlocked.caAddress,
+      loginEmail: unlocked.loginEmail,
+      originChainId: unlocked.originChainId,
+    };
+  }
+
+  const pk = process.env.PORTKEY_PRIVATE_KEY;
+  if (pk) {
+    return {
+      wallet: getWalletByPrivateKey(pk),
+      source: 'env',
+      caHash: process.env.PORTKEY_CA_HASH || null,
+      caAddress: process.env.PORTKEY_CA_ADDRESS || null,
+      loginEmail: null,
+      originChainId: null,
+    };
+  }
+
+  const active = getActiveWalletProfile();
+  if (active?.walletType === 'CA' && active.source === 'ca-keystore') {
+    const password = input.password || process.env.PORTKEY_CA_KEYSTORE_PASSWORD;
+    if (!password) {
+      throw new Error(
+        formatSignerError(
+          SIGNER_ERROR_CODES.PASSWORD_REQUIRED,
+          'active CA context found. Set PORTKEY_CA_KEYSTORE_PASSWORD or pass password.',
+        ),
+      );
+    }
+
+    const unlocked = unlockWallet(
+      password,
+      active.network || resolvedNetwork,
+      input.loginEmail || active.loginEmail,
+      input.keystoreFile || active.keystoreFile,
+    );
+    const wallet = getUnlockedWallet();
+    if (!wallet) {
+      throw new Error(
+        formatSignerError(
+          SIGNER_ERROR_CODES.CONTEXT_INVALID,
+          'failed to unlock active CA context',
+        ),
+      );
+    }
+    return {
+      wallet: wallet.wallet,
+      source: 'ca-keystore',
+      caHash: unlocked.caHash,
+      caAddress: unlocked.caAddress,
+      loginEmail: unlocked.loginEmail,
+      originChainId: unlocked.originChainId,
+    };
+  }
+
+  throw new Error(
+    formatSignerError(
+      SIGNER_ERROR_CODES.CONTEXT_NOT_FOUND,
+      'wallet not available. Use unlock, pass loginEmail/password, or set PORTKEY_PRIVATE_KEY.',
+    ),
+  );
 }
 
 /**

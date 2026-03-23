@@ -39,6 +39,8 @@ describe('lib/types', () => {
       expect(OperationType.UpdateGuardian).toBe(5);
       expect(OperationType.SetLoginAccount).toBe(7);
       expect(OperationType.Approve).toBe(8);
+      expect(OperationType.ModifyTransferLimit).toBe(9);
+      expect(OperationType.GuardianApproveTransfer).toBe(10);
     });
 
     it('should use CreateCAHolder(1) for registration and SocialRecovery(2) for login', () => {

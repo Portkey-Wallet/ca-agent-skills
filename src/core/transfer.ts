@@ -7,14 +7,16 @@ import type {
   TransactionResultParams,
   TransactionResult,
   ChainId,
+  ManagerSyncCheckParams,
+  ManagerSyncCheckResult,
+  TransactionFeePreview,
 } from '../../lib/types.js';
 import {
-  getWalletByPrivateKey,
   getTxResult,
   callSendMethod,
   type AElfWallet,
 } from '../../lib/aelf-client.js';
-import { getChainInfoByChainId } from './account.js';
+import { getChainInfoByChainId, getHolderInfo } from './account.js';
 import { managerForwardCall } from './contract.js';
 
 // ============================================================================
@@ -41,6 +43,15 @@ export async function sameChainTransfer(
   if (!params.amount) throw new Error('amount is required');
   if (!params.chainId) throw new Error('chainId is required');
 
+  const managerSync = await checkManagerSyncState(config, {
+    caHash: params.caHash,
+    chainId: params.chainId,
+    managerAddress: wallet.address,
+  });
+  if (!managerSync.isManagerSynced) {
+    throw new Error(formatManagerSyncError(managerSync));
+  }
+
   const result = await managerForwardCall(config, wallet, {
     caHash: params.caHash,
     contractAddress: params.tokenContractAddress,
@@ -52,11 +63,13 @@ export async function sameChainTransfer(
       memo: params.memo || '',
     },
     chainId: params.chainId,
+    guardiansApproved: params.guardiansApproved,
   });
 
   return {
     transactionId: result.transactionId,
     status: result.data.Status,
+    feePreview: normalizeFeePreviewForCa(result.feePreview, managerSync.caAddress),
   };
 }
 
@@ -85,6 +98,15 @@ export async function crossChainTransfer(
   if (!params.chainId) throw new Error('source chainId is required');
   if (!params.toChainId) throw new Error('toChainId is required');
 
+  const managerSync = await checkManagerSyncState(config, {
+    caHash: params.caHash,
+    chainId: params.chainId,
+    managerAddress: wallet.address,
+  });
+  if (!managerSync.isManagerSynced) {
+    throw new Error(formatManagerSyncError(managerSync));
+  }
+
   const chainInfo = await getChainInfoByChainId(config, params.chainId);
 
   // Step 1: Transfer tokens to manager address (so manager can call CrossChainTransfer)
@@ -99,6 +121,7 @@ export async function crossChainTransfer(
       memo: params.memo || '',
     },
     chainId: params.chainId,
+    guardiansApproved: params.guardiansApproved,
   });
 
   if (step1Result.data.Status !== 'MINED') {
@@ -128,6 +151,7 @@ export async function crossChainTransfer(
     return {
       transactionId: crossChainResult.transactionId,
       status: crossChainResult.data.Status,
+      feePreview: normalizeFeePreviewForCa(step1Result.feePreview, managerSync.caAddress),
     };
   } catch (step2Err: unknown) {
     // Step 1 succeeded but Step 2 failed — tokens are stuck on the Manager address.
@@ -143,6 +167,30 @@ export async function crossChainTransfer(
       `caHash: "${params.caHash}", step1TxId: "${step1Result.transactionId}" }`,
     );
   }
+}
+
+export async function checkManagerSyncState(
+  config: PortkeyConfig,
+  params: ManagerSyncCheckParams,
+): Promise<ManagerSyncCheckResult> {
+  if (!params.caHash) throw new Error('caHash is required');
+  if (!params.chainId) throw new Error('chainId is required');
+  if (!params.managerAddress) throw new Error('managerAddress is required');
+
+  const holderInfo = await getHolderInfo(config, {
+    caHash: params.caHash,
+    chainId: params.chainId,
+  });
+  const isManagerSynced = holderInfo.managerInfos.some((item) => item.address === params.managerAddress);
+
+  return {
+    caHash: params.caHash,
+    chainId: params.chainId,
+    managerAddress: params.managerAddress,
+    caAddress: holderInfo.caAddress,
+    isManagerSynced,
+    managerInfos: holderInfo.managerInfos,
+  };
 }
 
 // ============================================================================
@@ -240,4 +288,24 @@ export async function getTransactionResult(
  */
 function chainIdToNum(chainId: string): number {
   return AElf.utils.chainIdConvertor.base58ToChainId(chainId);
+}
+
+function formatManagerSyncError(result: ManagerSyncCheckResult): string {
+  return (
+    `Manager ${result.managerAddress} is not yet synced on ${result.chainId}. ` +
+    'Wait for holder-info.managerInfos to include this manager before retrying.'
+  );
+}
+
+function normalizeFeePreviewForCa(
+  preview: TransactionFeePreview | null | undefined,
+  caAddress: string,
+): TransactionFeePreview | undefined {
+  if (!preview) return undefined;
+  const chargingAddress = preview.chargingAddress || null;
+  return {
+    ...preview,
+    chargingAddress,
+    isCaPayingFee: chargingAddress ? chargingAddress === caAddress : null,
+  };
 }

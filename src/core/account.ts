@@ -68,7 +68,10 @@ export async function checkAccount(
       }
     } else if (
       err instanceof Error &&
-      (err.message.includes(ACCOUNT_NOT_FOUND_ERROR_CODE) || err.message.includes('not exist'))
+      (
+        err.message.includes(ACCOUNT_NOT_FOUND_ERROR_CODE) ||
+        /not exist|guardian not exist/i.test(err.message)
+      )
     ) {
       // Legacy fallback for non-HttpError paths
       return { isRegistered: false, originChainId: null };

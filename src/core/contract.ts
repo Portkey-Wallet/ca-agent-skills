@@ -3,16 +3,22 @@ import type {
   ChainId,
   ViewMethodParams,
   ManagerForwardCallParams,
+  TransactionFeePreview,
   TransactionResult,
 } from '../../lib/types.js';
 import {
   callViewMethod as aelfCallViewMethod,
+  calculateTransactionFee as aelfCalculateTransactionFee,
   callSendMethod,
   encodeManagerForwardCallParams,
   getWalletByPrivateKey,
   type AElfWallet,
 } from '../../lib/aelf-client.js';
 import { getChainInfoByChainId } from './account.js';
+import {
+  normalizeTransferGuardiansApproved,
+  toContractApprovedGuardians,
+} from './guardian-approval.js';
 
 // ============================================================================
 // callViewMethod — generic read-only contract call
@@ -79,7 +85,7 @@ export async function managerForwardCall(
   config: PortkeyConfig,
   wallet: AElfWallet,
   params: ManagerForwardCallParams,
-): Promise<{ transactionId: string; data: TransactionResult }> {
+): Promise<{ transactionId: string; data: TransactionResult; feePreview: TransactionFeePreview | null }> {
   if (!params.caHash) throw new Error('caHash is required');
   if (!params.contractAddress) throw new Error('contractAddress is required');
   if (!params.methodName) throw new Error('methodName is required');
@@ -94,15 +100,36 @@ export async function managerForwardCall(
     methodName: params.methodName,
     args: params.args,
   });
+  const guardiansApproved = toContractApprovedGuardians(
+    normalizeTransferGuardiansApproved(params.guardiansApproved),
+  );
+  const payload = guardiansApproved ? { ...encodedParams, guardiansApproved } : encodedParams;
+
+  let feePreview: TransactionFeePreview | null = null;
+  try {
+    feePreview = await aelfCalculateTransactionFee(
+      chainInfo.endPoint,
+      chainInfo.caContractAddress,
+      wallet,
+      'ManagerForwardCall',
+      payload,
+    );
+  } catch {
+    feePreview = null;
+  }
 
   // Call ManagerForwardCall on the CA contract
-  return callSendMethod(
+  const txResult = await callSendMethod(
     chainInfo.endPoint,
     chainInfo.caContractAddress,
     wallet,
     'ManagerForwardCall',
-    encodedParams,
+    payload,
   );
+  return {
+    ...txResult,
+    feePreview,
+  };
 }
 
 /**
@@ -112,7 +139,7 @@ export async function managerForwardCallWithKey(
   config: PortkeyConfig,
   privateKey: string,
   params: ManagerForwardCallParams,
-): Promise<{ transactionId: string; data: TransactionResult }> {
+): Promise<{ transactionId: string; data: TransactionResult; feePreview: TransactionFeePreview | null }> {
   const wallet = getWalletByPrivateKey(privateKey);
   return managerForwardCall(config, wallet, params);
 }

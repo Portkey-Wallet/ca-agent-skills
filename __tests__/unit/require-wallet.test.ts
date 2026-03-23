@@ -120,6 +120,28 @@ describe('mcp requireWallet', () => {
     expect(wallet.address).toBe(manager.address);
   });
 
+  test('accepts loginEmail + password input for direct keystore resolution', () => {
+    const manager = createWallet();
+    keystore.saveKeystore({
+      password: 'secret',
+      privateKey: manager.privateKey,
+      mnemonic: manager.mnemonic!,
+      caHash: 'hash_direct_input',
+      caAddress: 'ELF_direct_input_tDVV',
+      loginEmail: 'direct@example.com',
+      originChainId: 'AELF',
+      network: 'mainnet',
+    });
+    keystore.lockWallet();
+
+    const wallet = requireWallet({
+      network: 'mainnet',
+      loginEmail: 'direct@example.com',
+      password: 'secret',
+    });
+    expect(wallet.address).toBe(manager.address);
+  });
+
   test('throws SIGNER_PASSWORD_REQUIRED when active context exists without password', () => {
     const manager = createWallet();
     keystore.saveKeystore({

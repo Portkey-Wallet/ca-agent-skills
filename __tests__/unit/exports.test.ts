@@ -32,6 +32,13 @@ describe('SDK exports (index.ts)', () => {
     expect(typeof mod.getTokenPrice).toBe('function');
   });
 
+  it('should export transfer security functions', async () => {
+    const mod = await import('../../index');
+    expect(typeof mod.checkTransferSecurity).toBe('function');
+    expect(typeof mod.checkTransferLimit).toBe('function');
+    expect(typeof mod.transferPreflight).toBe('function');
+  });
+
   it('should export contract functions', async () => {
     const mod = await import('../../index');
     expect(typeof mod.callContractViewMethod).toBe('function');
@@ -47,6 +54,7 @@ describe('SDK exports (index.ts)', () => {
     expect(typeof mod.verifyCode).toBe('function');
     expect(typeof mod.registerWallet).toBe('function');
     expect(typeof mod.recoverWallet).toBe('function');
+    expect(typeof mod.recoverAndSaveWallet).toBe('function');
     expect(typeof mod.checkRegisterOrRecoveryStatus).toBe('function');
   });
 
@@ -55,6 +63,7 @@ describe('SDK exports (index.ts)', () => {
     expect(typeof mod.sameChainTransfer).toBe('function');
     expect(typeof mod.crossChainTransfer).toBe('function');
     expect(typeof mod.getTransactionResult).toBe('function');
+    expect(typeof mod.checkManagerSyncState).toBe('function');
   });
 
   it('should export guardian functions', async () => {
@@ -68,5 +77,6 @@ describe('SDK exports (index.ts)', () => {
     expect(typeof mod.getApprovalCount).toBe('function');
     expect(typeof mod.listWalletProfiles).toBe('function');
     expect(typeof mod.getWalletProfileByLoginEmail).toBe('function');
+    expect(typeof mod.resolveManagerWallet).toBe('function');
   });
 });

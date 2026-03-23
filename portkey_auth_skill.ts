@@ -19,6 +19,7 @@ import {
   recoverWallet,
   checkRegisterOrRecoveryStatus,
 } from './src/core/auth.js';
+import { recoverAndSaveWallet } from './src/core/auth-session.js';
 import { OperationType } from './lib/types.js';
 
 const program = new Command();
@@ -29,7 +30,10 @@ function parseOperationType(operation: string): OperationType {
   const normalized = String(operation || '').toLowerCase().trim();
   if (normalized === 'register') return OperationType.CreateCAHolder;
   if (normalized === 'recovery') return OperationType.SocialRecovery;
-  outputError(`Invalid --operation "${operation}". Expected "register" or "recovery".`);
+  if (normalized === 'transferapprove' || normalized === 'guardianapprovetransfer') {
+    return OperationType.GuardianApproveTransfer;
+  }
+  outputError(`Invalid --operation "${operation}". Expected "register", "recovery", or "transferApprove".`);
   return OperationType.Unknown; // unreachable
 }
 
@@ -47,7 +51,7 @@ program.command('send-code')
   .description('Send verification code to email')
   .requiredOption('--email <email>', 'Email address')
   .requiredOption('--verifier-id <id>', 'Verifier service ID')
-  .requiredOption('--operation <type>', 'Operation type: register|recovery')
+  .requiredOption('--operation <type>', 'Operation type: register|recovery|transferApprove')
   .requiredOption('--chain-id <chainId>', 'Resolved chain ID. Call portkey_query_skill.ts prepare-auth-flow first.')
   .action(async (opts) => {
     try {
@@ -65,7 +69,7 @@ program.command('verify-code')
   .requiredOption('--code <code>', '6-digit verification code')
   .requiredOption('--verifier-id <id>', 'Verifier service ID')
   .requiredOption('--session-id <id>', 'Verifier session ID')
-  .requiredOption('--operation <type>', 'Operation type: register|recovery')
+  .requiredOption('--operation <type>', 'Operation type: register|recovery|transferApprove')
   .requiredOption('--chain-id <chainId>', 'Resolved chain ID. Call portkey_query_skill.ts prepare-auth-flow first.')
   .action(async (opts) => {
     try {
@@ -121,6 +125,31 @@ program.command('recover')
     } catch (err: any) { outputError(err.message); }
   });
 
+program.command('recover-and-save')
+  .description('Recover an existing CA wallet, wait for pass status, and immediately save the new manager to a keystore')
+  .requiredOption('--email <email>', 'Email address')
+  .requiredOption('--guardians-approved <json>', 'JSON array of approved guardians')
+  .requiredOption('--chain-id <chainId>', 'Resolved chain ID. Call portkey_query_skill.ts prepare-auth-flow first.')
+  .requiredOption('--password <pwd>', 'Password to encrypt the saved keystore')
+  .option('--login-email <email>', 'Login email associated with this CA account (defaults to --email)')
+  .option('--max-status-checks <n>', 'Max status polling attempts before failing')
+  .option('--status-check-delay-ms <ms>', 'Delay between status polling attempts in milliseconds')
+  .action(async (opts) => {
+    try {
+      const config = getConfig({ network: program.opts().network });
+      outputSuccess(await recoverAndSaveWallet(config, {
+        email: opts.email,
+        guardiansApproved: safeJsonParse(opts.guardiansApproved, 'guardians-approved') as any,
+        chainId: opts.chainId,
+        password: opts.password,
+        loginEmail: opts.loginEmail,
+        network: config.network,
+        maxStatusChecks: opts.maxStatusChecks ? Number(opts.maxStatusChecks) : undefined,
+        statusCheckDelayMs: opts.statusCheckDelayMs ? Number(opts.statusCheckDelayMs) : undefined,
+      }));
+    } catch (err: any) { outputError(err.message); }
+  });
+
 program.command('check-status')
   .description('Check registration or recovery status')
   .requiredOption('--session-id <id>', 'Session ID')
@@ -159,6 +188,7 @@ program.command('unlock')
   .description('Unlock the encrypted keystore with a password')
   .requiredOption('--password <pwd>', 'Keystore password')
   .option('--login-email <email>', 'Login email associated with this CA account')
+  .option('--keystore-file <path>', 'Explicit CA keystore file path')
   .action(async (opts) => {
     try {
       const network = getConfig({ network: program.opts().network }).network;
@@ -166,6 +196,7 @@ program.command('unlock')
         opts.password,
         network,
         opts.loginEmail,
+        opts.keystoreFile,
       ));
     } catch (err: any) { outputError(err.message); }
   });

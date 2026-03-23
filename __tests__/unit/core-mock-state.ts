@@ -10,8 +10,9 @@ export class MockHttpError extends Error {
     let apiMessage = '';
     try {
       const parsed = JSON.parse(body);
-      errorCode = parsed?.code ?? parsed?.Code ?? null;
-      apiMessage = parsed?.message ?? parsed?.Message ?? '';
+      const nested = parsed?.error && typeof parsed.error === 'object' ? parsed.error : null;
+      errorCode = nested?.code ?? nested?.Code ?? parsed?.code ?? parsed?.Code ?? null;
+      apiMessage = nested?.message ?? nested?.Message ?? parsed?.message ?? parsed?.Message ?? '';
     } catch {
       apiMessage = body;
     }
@@ -69,6 +70,7 @@ type CoreMockState = {
   getContractInstanceImpl: (...args: any[]) => Promise<any>;
   callViewMethodImpl: (...args: any[]) => Promise<any>;
   callSendMethodImpl: (...args: any[]) => Promise<any>;
+  calculateTransactionFeeImpl: (...args: any[]) => Promise<any>;
   encodeManagerForwardCallParamsImpl: (...args: any[]) => Promise<any>;
   getTxResultImpl: (...args: any[]) => Promise<any>;
 };
@@ -90,6 +92,17 @@ const defaultState = (): CoreMockState => ({
   getContractInstanceImpl: async () => ({}),
   callViewMethodImpl: async () => ({}),
   callSendMethodImpl: async () => ({ transactionId: 'tx-mock', data: { Status: 'MINED' } }),
+  calculateTransactionFeeImpl: async () => ({
+    transactionFee: { ELF: '1000000' },
+    transactionFees: {
+      ChargingAddress: 'ELF_fee_payer',
+      Fee: { ELF: '1000000' },
+    },
+    chargingAddress: 'ELF_fee_payer',
+    isCaPayingFee: null,
+    feeSymbol: 'ELF',
+    feeAmount: '1000000',
+  }),
   encodeManagerForwardCallParamsImpl: async () => ({ encodedInput: '0xmock' }),
   getTxResultImpl: async () => ({ Status: 'MINED' }),
 });
@@ -111,6 +124,7 @@ export function resetCoreMockState(): void {
   coreMockState.getContractInstanceImpl = d.getContractInstanceImpl;
   coreMockState.callViewMethodImpl = d.callViewMethodImpl;
   coreMockState.callSendMethodImpl = d.callSendMethodImpl;
+  coreMockState.calculateTransactionFeeImpl = d.calculateTransactionFeeImpl;
   coreMockState.encodeManagerForwardCallParamsImpl = d.encodeManagerForwardCallParamsImpl;
   coreMockState.getTxResultImpl = d.getTxResultImpl;
 }
@@ -158,6 +172,7 @@ export function installCoreModuleMocks(): void {
     getContractInstance: (...args: any[]) => coreMockState.getContractInstanceImpl(...args),
     callViewMethod: (...args: any[]) => coreMockState.callViewMethodImpl(...args),
     callSendMethod: (...args: any[]) => coreMockState.callSendMethodImpl(...args),
+    calculateTransactionFee: (...args: any[]) => coreMockState.calculateTransactionFeeImpl(...args),
     encodeManagerForwardCallParams: (...args: any[]) =>
       coreMockState.encodeManagerForwardCallParamsImpl(...args),
     getTxResult: (...args: any[]) => coreMockState.getTxResultImpl(...args),

@@ -29,6 +29,23 @@ beforeEach(() => {
     }
     return {};
   };
+  coreMockState.callViewMethodImpl = async (
+    _rpc: string,
+    contractAddress: string,
+    method: string,
+    payload: any,
+  ) => {
+    if (contractAddress === 'CA' && method === 'GetHolderInfo') {
+      expect(payload.caHash).toBeTruthy();
+      return {
+        caHash: payload.caHash,
+        caAddress: 'ELF_ca_tDVV',
+        managerInfos: [{ address: wallet.address, extraData: '' }],
+        guardianList: { guardians: [] },
+      };
+    }
+    throw new Error(`Unexpected view call ${contractAddress}.${method}`);
+  };
 });
 
 const config = {
@@ -61,8 +78,10 @@ describe('core/transfer', () => {
       _caContract: string,
       _wallet: any,
       method: string,
+      payload: any,
     ) => {
       expect(method).toBe('ManagerForwardCall');
+      expect(payload.encodedInput).toBe('0xmock');
       return { transactionId: 'same-tx', data: { Status: 'MINED' } };
     };
 
@@ -76,7 +95,86 @@ describe('core/transfer', () => {
       memo: 'memo',
     });
 
-    expect(result).toEqual({ transactionId: 'same-tx', status: 'MINED' });
+    expect(result).toEqual({
+      transactionId: 'same-tx',
+      status: 'MINED',
+      feePreview: {
+        transactionFee: { ELF: '1000000' },
+        transactionFees: {
+          ChargingAddress: 'ELF_fee_payer',
+          Fee: { ELF: '1000000' },
+        },
+        chargingAddress: 'ELF_fee_payer',
+        isCaPayingFee: false,
+        feeSymbol: 'ELF',
+        feeAmount: '1000000',
+      },
+    });
+  });
+
+  test('sameChainTransfer forwards guardiansApproved for one-time approval', async () => {
+    coreMockState.callSendMethodImpl = async (
+      _rpc: string,
+      _caContract: string,
+      _wallet: any,
+      method: string,
+      payload: any,
+    ) => {
+      expect(method).toBe('ManagerForwardCall');
+      expect(payload.guardiansApproved).toHaveLength(1);
+      expect(payload.guardiansApproved[0].verificationInfo.id).toBe('verifier-1');
+      return { transactionId: 'same-guardian', data: { Status: 'MINED' } };
+    };
+
+    const result = await transfer.sameChainTransfer(config, wallet, {
+      caHash: 'hash',
+      tokenContractAddress: 'TOKEN',
+      symbol: 'AIBOUNTY',
+      to: 'ELF_to',
+      amount: '10000000',
+      chainId: 'tDVV',
+      guardiansApproved: [
+        {
+          identifier: 'user@example.com',
+          type: 0,
+          verifierId: 'verifier-1',
+          verificationDoc: '0,identifierHashFromDoc,1,2,3,10,1866392',
+          signature: 'abcd',
+        },
+      ],
+    });
+
+    expect(result.transactionId).toBe('same-guardian');
+    expect(result.status).toBe('MINED');
+  });
+
+  test('sameChainTransfer blocks when manager is not synced on target chain', async () => {
+    coreMockState.callViewMethodImpl = async (
+      _rpc: string,
+      contractAddress: string,
+      method: string,
+    ) => {
+      if (contractAddress === 'CA' && method === 'GetHolderInfo') {
+        return {
+          caHash: 'hash',
+          caAddress: 'ELF_ca_tDVV',
+          managerInfos: [{ address: 'ELF_other_manager', extraData: '' }],
+          guardianList: { guardians: [] },
+        };
+      }
+      throw new Error(`Unexpected view call ${contractAddress}.${method}`);
+    };
+
+    await expect(
+      transfer.sameChainTransfer(config, wallet, {
+        caHash: 'hash',
+        tokenContractAddress: 'TOKEN',
+        symbol: 'ELF',
+        to: 'ELF_to',
+        amount: '1',
+        chainId: 'tDVV',
+      }),
+    ).rejects.toThrow('Manager ELF_wallet is not yet synced on tDVV');
   });
 
   test('crossChainTransfer throws when step1 is not mined', async () => {
@@ -157,6 +255,7 @@ describe('core/transfer', () => {
     });
 
     expect(result.transactionId).toBe('step2');
+    expect(result.feePreview?.isCaPayingFee).toBe(false);
   });
 
   test('recoverStuckTransfer sends token back to CA', async () => {
