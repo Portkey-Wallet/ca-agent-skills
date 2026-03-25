@@ -83,7 +83,8 @@ Manager 私钥使用 aelf-sdk 内置的 keystore 方案（scrypt + AES-128-CTR�
 ### 新对话
 
 ```bash
-# AI 调用 portkey_wallet_status 检查是否存在 keystore
+# AI 调用 portkey_wallet_status 检查 active 或指定 profile 的 keystore
+# 对 profile keystore，传 --login-email（或依赖之前 save/recover 写入的 active profile）
 # 如果已锁定，向用户索要密码 → portkey_unlock(密码)
 # 如果忘记密码，切换到 recover-and-save，重新完成 guardian 验证码校验并保存新的 keystore
 # 之后写操作自动生效
@@ -138,14 +139,24 @@ bun run portkey_auth_skill.ts recover-and-save \
 bun run portkey_query_skill.ts manager-sync-status \
   --ca-hash "<caHash>" \
   --chain-id tDVV \
-  --manager-address "<managerAddress>"
+  --manager-address "<recover-and-save 返回的 managerAddress，或当前选中的 signer 地址>"
 
 # 3. 收集 fresh transferApprove proofs
 # 4. 直接用 loginEmail + password 发起写操作
+bun run portkey_tx_skill.ts transfer \
+  --login-email "user@example.com" \
+  --password "你的密码" \
+  --ca-hash "<caHash>" \
+  --token-contract "<tokenContract>" \
+  --symbol ELF \
+  --to "<receiver>" \
+  --amount 101000000 \
+  --chain-id tDVV \
+  --guardians-approved '[...]'
 ```
 
 - `forward-call` 现在也会像 `transfer` / `cross-chain-transfer` 一样先检查 manager sync，未同步时不会继续做 fee preview 或发交易。
-- `wallet-status` 在本地已有 keystore 但未解锁时，会返回 `recommendedAction` 和 `userHint`，明确提示“输入密码解锁”或“忘记密码就走 recover-and-save”。
+- `wallet-status` 在本地已有 keystore 但未解锁时，会返回 `recommendedAction` 和 `userHint`。`recommendedAction` 是机器可路由的下一步（`unlock`），`userHint` 会补充“先确认 loginEmail / keystoreFile 是否选对；如果忘记密码再走 recover-and-save”的说明。
 
 ## 跨 Skill 签名共享
 

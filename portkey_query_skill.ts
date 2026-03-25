@@ -72,7 +72,7 @@ program.command('holder-info')
   });
 
 program.command('manager-sync-status')
-  .description('Check whether a manager address has synced to the CA holder on the target chain')
+  .description('Check whether a manager address has synced to the CA holder on the target chain. Use managerAddress from recover-and-save or the currently selected signer.')
   .requiredOption('--ca-hash <hash>', 'CA hash')
   .requiredOption('--chain-id <chainId>', 'Target chain ID')
   .requiredOption('--manager-address <addr>', 'Manager wallet address')

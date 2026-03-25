@@ -559,6 +559,8 @@ export interface ManagerForwardCallParams {
   chainId: ChainId;
   /** Optional guardian approvals for transfer-related ManagerForwardCall flows */
   guardiansApproved?: ApprovedGuardian[];
+  /** Optional pre-fetched manager sync result to avoid duplicate holder lookups */
+  managerSync?: ManagerSyncCheckResult;
 }
 
 export interface RecoverAndSaveWalletParams {

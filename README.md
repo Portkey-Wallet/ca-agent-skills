@@ -90,8 +90,9 @@ Manager private keys are encrypted and stored locally using aelf-sdk's keystore 
 ### New conversation
 
 ```bash
-# AI calls portkey_wallet_status to check if keystore exists
-# If locked, asks user for password → portkey_unlock(password)
+# AI calls portkey_wallet_status to check the active or targeted keystore
+# For profile keystores, pass --login-email (or use the active CA profile from a prior save/recover)
+# If locked, ask for password → portkey_unlock(password)
 # If the password was forgotten, switch to recover-and-save with fresh guardian verification codes
 # Write operations in the same process now work automatically
 ```
@@ -148,7 +149,7 @@ bun run portkey_auth_skill.ts recover-and-save \
 bun run portkey_query_skill.ts manager-sync-status \
   --ca-hash "<caHash>" \
   --chain-id tDVV \
-  --manager-address "<managerAddress>"
+  --manager-address "<managerAddress from recover-and-save or the selected signer>"
 
 # 3. collect fresh transferApprove proofs
 # 4. transfer using the saved keystore directly in the tx command
@@ -169,7 +170,7 @@ Notes:
 - CA write commands can now resolve signer directly from `--login-email` + `--password`, so they no longer depend on a previous `unlock` from another CLI process.
 - Same-chain and cross-chain transfers now check whether the current manager is already synced to the target chain before sending any transaction.
 - Generic `forward-call` now performs the same manager sync precheck before fee preview or transaction send.
-- `wallet-status` returns `recommendedAction` and `userHint` when a local keystore exists but is still locked, so agents can guide the user to unlock or re-login / recover.
+- `wallet-status` returns `recommendedAction` and `userHint` when a local keystore exists but is still locked. `recommendedAction` is the machine-routable next step (`unlock`), while `userHint` carries the fallback guidance for wrong profile selection or forgotten passwords.
 - Transfer results include a fee preview when the chain can calculate it, including `chargingAddress` and whether the CA appears to be paying the fee.
 
 ## Cross-skill signing

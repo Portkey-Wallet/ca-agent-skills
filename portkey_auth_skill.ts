@@ -210,7 +210,7 @@ program.command('lock')
   });
 
 program.command('wallet-status')
-  .description('Check wallet status (keystore exists, unlocked, CA info, and whether unlock or re-login is recommended)')
+  .description('Check wallet status (keystore exists, unlocked, CA info, recommended next step, and wrong-profile / forgotten-password guidance)')
   .option('--login-email <email>', 'Login email associated with this CA account')
   .action(async (opts) => {
     try {

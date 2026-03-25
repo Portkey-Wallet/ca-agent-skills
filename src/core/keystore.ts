@@ -34,6 +34,7 @@ const FILE_MODE = 0o600;
 const ALLOWED_NETWORKS = ['mainnet'] as const;
 const LOCKED_KEYSTORE_RECOVERY_HINT =
   'A local keystore already exists for this account, so the password is required to continue. ' +
+  'First confirm that the selected loginEmail / keystoreFile is the one you intended to use. ' +
   'If the password was forgotten, you can re-login / recover with recover-and-save. ' +
   'Re-login requires fresh guardian verification codes and will save a new local keystore after success.';
 
@@ -80,7 +81,7 @@ export interface WalletStatus {
   /** Network */
   network: NetworkType;
   /** Recommended next step for the local keystore */
-  recommendedAction?: 'none' | 'unlock' | 'unlock_or_relogin';
+  recommendedAction?: 'none' | 'unlock';
   /** User-facing hint for the next step */
   userHint?: string | null;
 }
@@ -218,6 +219,17 @@ function readKeystoreMetadata(filePath: string): {
 
 function getRequestedKeystorePath(network: string, loginEmail?: string): string {
   return getKeystorePath(network, loginEmail);
+}
+
+function resolveStatusKeystorePath(network: NetworkType, loginEmail?: string): string {
+  if (loginEmail) {
+    return getRequestedKeystorePath(network, loginEmail);
+  }
+  const active = getActiveKeystorePath();
+  if (active && fs.existsSync(active)) {
+    return active;
+  }
+  return getRequestedKeystorePath(network);
 }
 
 function resolveKeystorePath(locator: KeystoreLocatorInput): string {
@@ -490,7 +502,7 @@ export function lockWallet(): { message: string } {
  */
 export function getWalletStatus(network: string, loginEmail?: string): WalletStatus {
   const resolvedNetwork = assertAllowedNetwork(network);
-  const filePath = getRequestedKeystorePath(resolvedNetwork, loginEmail);
+  const filePath = resolveStatusKeystorePath(resolvedNetwork, loginEmail);
   const exists = fs.existsSync(filePath);
   const unlocked = unlockedState !== null && isSamePath(unlockedState.keystorePath, filePath);
   const metadata = exists
@@ -505,7 +517,7 @@ export function getWalletStatus(network: string, loginEmail?: string): WalletSta
     loginEmail: metadata.loginEmail,
     managerAddress: unlocked ? unlockedState!.wallet.address : null,
     network: resolvedNetwork,
-    recommendedAction: exists && !unlocked ? 'unlock_or_relogin' : 'none',
+    recommendedAction: exists && !unlocked ? 'unlock' : 'none',
     userHint: exists && !unlocked ? getLockedKeystoreHint() : null,
   };
 }

@@ -63,12 +63,13 @@ export async function sameChainTransfer(
     },
     chainId: params.chainId,
     guardiansApproved: params.guardiansApproved,
+    managerSync,
   });
 
   return {
     transactionId: result.transactionId,
     status: result.data.Status,
-    feePreview: normalizeFeePreviewForCa(result.feePreview, managerSync.caAddress),
+    feePreview: normalizeFeePreviewForCa(result.feePreview, result.caAddress),
   };
 }
 
@@ -121,6 +122,7 @@ export async function crossChainTransfer(
     },
     chainId: params.chainId,
     guardiansApproved: params.guardiansApproved,
+    managerSync,
   });
 
   if (step1Result.data.Status !== 'MINED') {
@@ -150,7 +152,7 @@ export async function crossChainTransfer(
     return {
       transactionId: crossChainResult.transactionId,
       status: crossChainResult.data.Status,
-      feePreview: normalizeFeePreviewForCa(step1Result.feePreview, managerSync.caAddress),
+      feePreview: normalizeFeePreviewForCa(step1Result.feePreview, step1Result.caAddress),
     };
   } catch (step2Err: unknown) {
     // Step 1 succeeded but Step 2 failed — tokens are stuck on the Manager address.

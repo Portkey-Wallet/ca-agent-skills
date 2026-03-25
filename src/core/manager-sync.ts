@@ -30,8 +30,14 @@ export async function checkManagerSyncState(
 }
 
 export function formatManagerSyncError(result: ManagerSyncCheckResult): string {
+  const currentManagers = result.managerInfos.map((item) => item.address).filter(Boolean);
+  const currentManagersSummary = currentManagers.length > 0
+    ? `Current on-chain managers: ${currentManagers.slice(0, 3).join(', ')}${currentManagers.length > 3 ? ', ...' : ''}. `
+    : 'No manager is currently visible on-chain for this holder. ';
   return (
     `Manager ${result.managerAddress} is not yet synced on ${result.chainId}. ` +
-    'Wait for holder-info.managerInfos to include this manager before retrying.'
+    currentManagersSummary +
+    'If you expected a different local manager, verify the selected loginEmail/keystoreFile or re-login / recover. ' +
+    'Otherwise wait for holder-info.managerInfos to include this manager before retrying.'
   );
 }

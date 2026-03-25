@@ -204,7 +204,7 @@ describe('core/keystore', () => {
     expect(firstStatus.userHint).toBeNull();
     expect(secondStatus.unlocked).toBe(false);
     expect(secondStatus.caHash).toBe('hash_second_lookup');
-    expect(secondStatus.recommendedAction).toBe('unlock_or_relogin');
+    expect(secondStatus.recommendedAction).toBe('unlock');
     expect(secondStatus.userHint).toContain('recover-and-save');
   });
 
@@ -230,7 +230,7 @@ describe('core/keystore', () => {
     expect(unlocked.managerAddress).toBe(wallet.address);
   });
 
-  test('getWalletStatus without loginEmail only checks the legacy path', () => {
+  test('getWalletStatus without loginEmail falls back to the active CA profile when available', () => {
     const wallet = createWallet();
 
     keystore.saveKeystore({
@@ -244,11 +244,15 @@ describe('core/keystore', () => {
       network: 'mainnet',
     });
 
+    keystore.lockWallet();
+
     const legacyStatus = keystore.getWalletStatus('mainnet');
     const targetedStatus = keystore.getWalletStatus('mainnet', 'profile-only@example.com');
 
-    expect(legacyStatus.loginEmail).not.toBe('profile-only@example.com');
-    expect(legacyStatus.caHash).not.toBe('hash_profile_only');
+    expect(legacyStatus.exists).toBe(true);
+    expect(legacyStatus.loginEmail).toBe('profile-only@example.com');
+    expect(legacyStatus.caHash).toBe('hash_profile_only');
+    expect(legacyStatus.recommendedAction).toBe('unlock');
     expect(targetedStatus.exists).toBe(true);
     expect(targetedStatus.loginEmail).toBe('profile-only@example.com');
     expect(targetedStatus.caHash).toBe('hash_profile_only');
@@ -459,6 +463,9 @@ describe('core/keystore', () => {
 
     expect(() => keystore.unlockWallet('wrong-secret', 'mainnet', 'hint@example.com')).toThrow(
       'recover-and-save',
+    );
+    expect(() => keystore.unlockWallet('wrong-secret', 'mainnet', 'hint@example.com')).toThrow(
+      'selected loginEmail / keystoreFile',
     );
   });
 });

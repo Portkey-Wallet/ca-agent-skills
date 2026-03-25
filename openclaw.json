@@ -378,12 +378,58 @@
       }
     },
     {
+      "name": "portkey-auth-recover-and-save",
+      "description": "Recover an existing CA wallet, wait for pass status, and immediately save the new manager to a reusable local keystore.",
+      "command": "bun run portkey_auth_skill.ts recover-and-save",
+      "args": [
+        "--email",
+        "--guardians-approved",
+        "--chain-id",
+        "--password",
+        "--login-email"
+      ],
+      "cwd": ".",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email address to recover"
+          },
+          "guardians-approved": {
+            "type": "string",
+            "description": "JSON array of approved guardians"
+          },
+          "chain-id": {
+            "type": "string",
+            "description": "Resolved chain ID from prepare-auth-flow"
+          },
+          "password": {
+            "type": "string",
+            "description": "Password to encrypt the reusable keystore"
+          },
+          "login-email": {
+            "type": "string",
+            "description": "Optional profile email to persist with the recovered keystore"
+          }
+        },
+        "required": [
+          "email",
+          "guardians-approved",
+          "chain-id",
+          "password"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
       "name": "portkey-auth-unlock",
       "description": "Unlock the encrypted keystore with a password. If the password was forgotten, use recover-and-save to re-login / recover with fresh guardian verification codes.",
       "command": "bun run portkey_auth_skill.ts unlock",
       "args": [
         "--password",
-        "--login-email"
+        "--login-email",
+        "--keystore-file"
       ],
       "cwd": ".",
       "inputSchema": {
@@ -396,6 +442,10 @@
           "login-email": {
             "type": "string",
             "description": "Login email associated with this CA account"
+          },
+          "keystore-file": {
+            "type": "string",
+            "description": "Explicit keystore file path"
           }
         },
         "required": [
@@ -421,7 +471,7 @@
     },
     {
       "name": "portkey-auth-wallet-status",
-      "description": "Check wallet status for the legacy network keystore path or a targeted loginEmail profile, including whether unlock or re-login / recover is recommended.",
+      "description": "Check wallet status for the active or targeted CA keystore, including the recommended next step (unlock) and fallback guidance for wrong-profile selection or forgotten passwords.",
       "command": "bun run portkey_auth_skill.ts wallet-status",
       "args": [
         "--login-email"
@@ -737,12 +787,60 @@
         "--contract-address",
         "--method-name",
         "--args",
-        "--chain-id"
+        "--guardians-approved",
+        "--chain-id",
+        "--login-email",
+        "--password",
+        "--keystore-file"
       ],
       "cwd": ".",
       "inputSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "ca-hash": {
+            "type": "string",
+            "description": "CA hash"
+          },
+          "contract-address": {
+            "type": "string",
+            "description": "Target contract address"
+          },
+          "method-name": {
+            "type": "string",
+            "description": "Target method name"
+          },
+          "args": {
+            "type": "string",
+            "description": "JSON method arguments"
+          },
+          "guardians-approved": {
+            "type": "string",
+            "description": "Optional JSON array of approved guardians for transfer-related calls"
+          },
+          "chain-id": {
+            "type": "string",
+            "description": "Chain ID"
+          },
+          "login-email": {
+            "type": "string",
+            "description": "Use a saved CA keystore profile by login email"
+          },
+          "password": {
+            "type": "string",
+            "description": "Keystore password for this command"
+          },
+          "keystore-file": {
+            "type": "string",
+            "description": "Explicit CA keystore file path"
+          }
+        },
+        "required": [
+          "ca-hash",
+          "contract-address",
+          "method-name",
+          "args",
+          "chain-id"
+        ],
         "additionalProperties": true
       }
     }

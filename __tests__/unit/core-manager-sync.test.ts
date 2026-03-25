@@ -96,5 +96,7 @@ describe('core/manager-sync', () => {
 
     expect(result.isManagerSynced).toBe(false);
     expect(managerSync.formatManagerSyncError(result)).toContain('Manager ELF_manager is not yet synced on tDVV');
+    expect(managerSync.formatManagerSyncError(result)).toContain('Current on-chain managers: ELF_other_manager');
+    expect(managerSync.formatManagerSyncError(result)).toContain('verify the selected loginEmail/keystoreFile or re-login / recover');
   });
 });

@@ -179,6 +179,7 @@ describe('core/contract', () => {
     expect(result.transactionId).toBe('tx-forward');
     expect(result.feePreview?.feeAmount).toBe('1000000');
     expect(result.feePreview?.chargingAddress).toBe('ELF_fee_payer');
+    expect(result.caAddress).toBe('ELF_ca_tDVV');
   });
 
   test('managerForwardCall forwards one-time approval guardians for transfer calls', async () => {

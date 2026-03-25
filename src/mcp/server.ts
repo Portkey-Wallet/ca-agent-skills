@@ -991,7 +991,7 @@ server.registerTool(
 server.registerTool(
   'portkey_wallet_status',
   {
-    description: 'Check the wallet status for the legacy network keystore path or a targeted loginEmail profile: whether a keystore exists, whether it is unlocked, CA address, manager address, and whether the recommended next step is unlock or re-login / recover.',
+    description: 'Check the wallet status for the active or targeted CA keystore: whether a keystore exists, whether it is unlocked, CA address, manager address, the recommended next step (unlock), and fallback guidance for wrong-profile selection or forgotten passwords.',
     inputSchema: {
       loginEmail: LOGIN_EMAIL.optional(),
       network: NETWORK,
