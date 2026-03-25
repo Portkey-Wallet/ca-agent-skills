@@ -11,10 +11,10 @@ beforeAll(async () => {
   contract = await import('../../src/core/contract.js');
 });
 
-beforeEach(() => {
-  resetCoreMockState();
-  account.clearChainInfoCache();
-  coreMockState.httpGetImpl = async (path: string) => {
+  beforeEach(() => {
+    resetCoreMockState();
+    account.clearChainInfoCache();
+    coreMockState.httpGetImpl = async (path: string) => {
     if (path === '/api/app/search/chainsinfoindex') {
       return {
         items: [
@@ -26,10 +26,30 @@ beforeEach(() => {
           },
         ],
       };
-    }
-    return {};
-  };
-});
+      }
+      return {};
+    };
+    coreMockState.callViewMethodImpl = async (
+      _rpc: string,
+      contractAddress: string,
+      method: string,
+      payload: any,
+    ) => {
+      if (contractAddress === 'CA_CONTRACT' && method === 'GetHolderInfo') {
+        expect(payload.caHash).toBeTruthy();
+        return {
+          caHash: payload.caHash,
+          caAddress: 'ELF_ca_tDVV',
+          managerInfos: [
+            { address: 'ELF_wallet', extraData: '' },
+            { address: 'ELF_wallet_2', extraData: '' },
+          ],
+          guardianList: { guardians: [] },
+        };
+      }
+      throw new Error(`Unexpected view call ${contractAddress}.${method}`);
+    };
+  });
 
 const config = {
   apiUrl: 'https://api',
@@ -159,6 +179,7 @@ describe('core/contract', () => {
     expect(result.transactionId).toBe('tx-forward');
     expect(result.feePreview?.feeAmount).toBe('1000000');
     expect(result.feePreview?.chargingAddress).toBe('ELF_fee_payer');
+    expect(result.caAddress).toBe('ELF_ca_tDVV');
   });
 
   test('managerForwardCall forwards one-time approval guardians for transfer calls', async () => {
@@ -198,6 +219,56 @@ describe('core/contract', () => {
     });
 
     expect(result.transactionId).toBe('tx-guardian');
+  });
+
+  test('managerForwardCall blocks before fee preview and send when manager is not synced', async () => {
+    const wallet = { address: 'ELF_wallet', privateKey: 'pk' } as any;
+    let feePreviewCalled = false;
+    let sendCalled = false;
+
+    coreMockState.callViewMethodImpl = async (
+      _rpc: string,
+      contractAddress: string,
+      method: string,
+    ) => {
+      if (contractAddress === 'CA_CONTRACT' && method === 'GetHolderInfo') {
+        return {
+          caHash: 'hash',
+          caAddress: 'ELF_ca_tDVV',
+          managerInfos: [{ address: 'ELF_other_manager', extraData: '' }],
+          guardianList: { guardians: [] },
+        };
+      }
+      throw new Error(`Unexpected view call ${contractAddress}.${method}`);
+    };
+    coreMockState.calculateTransactionFeeImpl = async () => {
+      feePreviewCalled = true;
+      return {
+        transactionFee: null,
+        transactionFees: null,
+        chargingAddress: null,
+        isCaPayingFee: null,
+        feeSymbol: null,
+        feeAmount: null,
+      };
+    };
+    coreMockState.callSendMethodImpl = async () => {
+      sendCalled = true;
+      return { transactionId: 'tx-forward', data: { Status: 'MINED' } };
+    };
+
+    await expect(
+      contract.managerForwardCall(config, wallet, {
+        caHash: 'hash',
+        contractAddress: 'TOKEN',
+        methodName: 'ClaimByPortkeyToCa',
+        args: { value: Buffer.from('1234', 'hex') },
+        chainId: 'tDVV',
+      }),
+    ).rejects.toThrow('Manager ELF_wallet is not yet synced on tDVV');
+
+    expect(feePreviewCalled).toBe(false);
+    expect(sendCalled).toBe(false);
   });
 
   test('managerForwardCallWithKey builds wallet and forwards call', async () => {

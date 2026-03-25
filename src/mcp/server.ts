@@ -22,6 +22,7 @@ import { getTokenBalance, getTokenList, getNftCollections, getNftItems, getToken
 import { getVerifierServer, sendVerificationCode, verifyCode, registerWallet, recoverWallet, checkRegisterOrRecoveryStatus } from '../core/auth.js';
 import { recoverAndSaveWallet } from '../core/auth-session.js';
 import { sameChainTransfer, crossChainTransfer, recoverStuckTransfer, getTransactionResult } from '../core/transfer.js';
+import { checkManagerSyncState } from '../core/manager-sync.js';
 import { addGuardian, removeGuardian } from '../core/guardian.js';
 import { callContractViewMethod, managerForwardCallWithKey } from '../core/contract.js';
 import { transferPreflight } from '../core/security.js';
@@ -92,6 +93,7 @@ const READ_ONLY_TOOLS = new Set([
   'portkey_check_account',
   'portkey_get_guardian_list',
   'portkey_get_holder_info',
+  'portkey_manager_sync_status',
   'portkey_get_chain_info',
   'portkey_prepare_auth_flow',
   'portkey_get_verifier',
@@ -284,6 +286,28 @@ server.registerTool(
   async ({ caHash, chainId, network }) => {
     try {
       return ok(await getHolderInfo(getConfig({ network }), { caHash, chainId }));
+    } catch (err) { return fail(err); }
+  },
+);
+
+server.registerTool(
+  'portkey_manager_sync_status',
+  {
+    description: 'Check whether the current manager address has synced to the CA holder on the target chain. Use this before forward-call or claim flows on a different write chain such as tDVV.',
+    inputSchema: {
+      caHash: z.string().describe('CA hash'),
+      chainId: CHAIN_ID.describe('Target chain ID where the write will be sent'),
+      managerAddress: z.string().describe('Manager wallet address to check'),
+      network: NETWORK,
+    },
+  },
+  async ({ caHash, chainId, managerAddress, network }) => {
+    try {
+      return ok(await checkManagerSyncState(getConfig({ network }), {
+        caHash,
+        chainId,
+        managerAddress,
+      }));
     } catch (err) { return fail(err); }
   },
 );
@@ -778,7 +802,7 @@ server.registerTool(
 server.registerTool(
   'portkey_forward_call',
   {
-    description: 'Execute a generic ManagerForwardCall on any contract through the CA wallet. Use for any custom contract interaction. The CA contract forwards the call to the target contract on behalf of the CA address.',
+    description: 'Execute a generic ManagerForwardCall on any contract through the CA wallet. The current manager must already be synced on the target chain; if not, this tool stops before fee preview or transaction send.',
     inputSchema: {
       caHash: z.string().describe('CA hash'),
       contractAddress: z.string().describe('Target contract address'),
@@ -893,7 +917,7 @@ server.registerTool(
 server.registerTool(
   'portkey_unlock',
   {
-    description: 'Unlock the encrypted keystore with a password. Loads the Manager wallet into memory for write operations. Use at the start of a new conversation if a keystore exists. Check portkey_wallet_status first to see if unlock is needed.',
+    description: 'Unlock the encrypted keystore with a password. Loads the Manager wallet into memory for write operations. If the password was forgotten, stop retrying and use portkey_recover_and_save to re-login / recover with fresh guardian verification codes.',
     inputSchema: {
       password: z.string().min(1).describe('Keystore password'),
       loginEmail: LOGIN_EMAIL.optional(),
@@ -967,7 +991,7 @@ server.registerTool(
 server.registerTool(
   'portkey_wallet_status',
   {
-    description: 'Check the wallet status for the legacy network keystore path or a targeted loginEmail profile: whether a keystore exists, whether it is unlocked, CA address, and manager address. Use portkey_list_wallet_profiles to discover profile keystores.',
+    description: 'Check the wallet status for the active or targeted CA keystore: whether a keystore exists, whether it is unlocked, CA address, manager address, the recommended next step (unlock), and fallback guidance for wrong-profile selection or forgotten passwords.',
     inputSchema: {
       loginEmail: LOGIN_EMAIL.optional(),
       network: NETWORK,

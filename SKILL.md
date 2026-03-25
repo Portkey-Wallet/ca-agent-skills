@@ -1,6 +1,6 @@
 ---
 name: "portkey-ca-agent-skills"
-version: "2.2.0"
+version: "2.3.0"
 description: "Portkey CA wallet registration/auth/guardian/transfer operations for agents."
 activation:
   keywords:
@@ -42,6 +42,9 @@ activation:
 - Never print private keys, mnemonics, or tokens in channel outputs.
 - For write operations, require explicit user confirmation and validate parameters before sending transactions.
 - Prefer read-only preflight checks first when available.
+- Route `Get*` and other read-only contract methods through `view-call` / `callContractViewMethod`, not `forward-call`.
+- Route `forward-call` / `managerForwardCall` only to state-changing methods.
+- For `Empty`-input view methods such as `GetConfig`, omit params entirely so the runtime performs `.call()` with no arguments.
 - Treat backend `3002 / Guardian not exist.` as an unregistered account and route to `register`.
 - Before `transfer` / `cross-chain-transfer`, run `transfer-preflight` to decide whether the path is:
   - direct transfer
@@ -50,19 +53,23 @@ activation:
   - wallet security upgrade / guardian sync
 - Recommended stable write path is:
   - `recover-and-save`
-  - wait for manager sync on target chain
+  - poll `manager-sync-status` on the target chain
   - collect fresh `transferApprove` proofs
   - submit `transfer` / `cross-chain-transfer` with `loginEmail + password`
+- Older AA/CA accounts recovered on `AELF` and then written on `tDVV` are a high-risk sync scenario; always check `manager-sync-status` before the first `forward-call` / claim / transfer on `tDVV`.
 - `transfer-preflight` reports both the transferred asset balance and the chain default fee-token balance (`feeSymbol` / `feeBalance` / `feeDecimals`) when deciding one-time approval eligibility.
 - `send-code` / `verify-code` support `transferApprove` for one-time transfer approval proof collection.
 - `transfer`, `cross-chain-transfer`, and transfer-related `forward-call` accept optional `guardiansApproved`.
-- `transfer` / `cross-chain-transfer` now block early when the current manager has not yet synced to the target chain.
+- `transfer`, `cross-chain-transfer`, and generic `forward-call` now block early when the current manager has not yet synced to the target chain.
 - CLI write commands can resolve signer directly from CA keystore options (`loginEmail` / `password` / `keystoreFile`) instead of relying on a previous in-memory `unlock`.
+- `wallet-status` returns `recommendedAction` / `userHint` when a local keystore exists but is still locked. `recommendedAction=unlock` is the next machine step; `userHint` explains how to verify the selected `loginEmail` / `keystoreFile` first and then route to `recover-and-save` only if the password was truly forgotten.
+- `VirtualTransactionCreated` is forwarded-write evidence only; it is not a decoded view payload and not a standalone proof that a read-only contract query succeeded.
 
 ## Command recipes
 - Start MCP server: `bun run mcp`
 - Run CLI entry: `bun run portkey_query_skill.ts chain-info`
 - Run transfer preflight: `bun run portkey_query_skill.ts transfer-preflight --ca-hash <hash> --ca-address <addr> --chain-id tDVV --symbol ELF --amount 100000000`
+- Run manager sync status: `bun run portkey_query_skill.ts manager-sync-status --ca-hash <hash> --chain-id tDVV --manager-address <addr-from-recover-and-save-or-selected-signer>`
 - Read active wallet context: `portkey_get_active_wallet`
 - Set active wallet context: `portkey_set_active_wallet`
 - Install into IronClaw: `bun run setup ironclaw`

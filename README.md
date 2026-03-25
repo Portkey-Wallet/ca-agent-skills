@@ -72,6 +72,38 @@ ca-agent-skills/
 | 28 | Wallet | Wallet status | `portkey_wallet_status` | `wallet-status` | `getWalletStatus` |
 | 29 | Wallet | Get active wallet context | `portkey_get_active_wallet` | — | `getActiveWallet` |
 | 30 | Wallet | Set active wallet context | `portkey_set_active_wallet` | — | `setActiveWallet` |
+| 31 | Wallet | Manager sync status | `portkey_manager_sync_status` | `manager-sync-status` | `checkManagerSyncState` |
+
+## Contract Call Routing
+
+Choose the contract tool by method type, not just by wallet type.
+
+- `forward-call` / `managerForwardCall` are for state-changing methods only.
+- `view-call` / `callContractViewMethod` are for `Get*` and other read-only methods.
+- For `Empty`-input view methods such as `GetConfig`, omit `--params` entirely so the tool performs `.call()` with no arguments.
+- If a read-only method is routed through `forward-call`, the result is a `CA.ManagerForwardCall` receipt, not the inner method's decoded view return payload.
+- `VirtualTransactionCreated` is expected on successful forwarded writes. It proves that the CA contract created the inner call, but it is not the decoded return value and not a standalone proof of final business success.
+
+Resonance examples:
+
+```bash
+# Read-only queue status lookup
+bun run portkey_query_skill.ts view-call \
+  --rpc-url https://tdvv-public-node.aelf.io \
+  --contract-address 28Lot71VrWm1WxrEjuDqaepywi7gYyZwHysUcztjkHGFsPPrZy \
+  --method-name GetPairQueueStatus \
+  --params '"<address>"'
+
+# State-changing queue join
+bun run portkey_tx_skill.ts forward-call \
+  --login-email "user@example.com" \
+  --password "your-password" \
+  --ca-hash "<caHash>" \
+  --contract-address 28Lot71VrWm1WxrEjuDqaepywi7gYyZwHysUcztjkHGFsPPrZy \
+  --method-name JoinPairQueue \
+  --args '{}' \
+  --chain-id tDVV
+```
 
 ## Wallet Persistence (Keystore)
 
@@ -89,8 +121,10 @@ Manager private keys are encrypted and stored locally using aelf-sdk's keystore 
 ### New conversation
 
 ```bash
-# AI calls portkey_wallet_status to check if keystore exists
-# If locked, asks user for password → portkey_unlock(password)
+# AI calls portkey_wallet_status to check the active or targeted keystore
+# For profile keystores, pass --login-email (or use the active CA profile from a prior save/recover)
+# If locked, ask for password → portkey_unlock(password)
+# If the password was forgotten, switch to recover-and-save with fresh guardian verification codes
 # Write operations in the same process now work automatically
 ```
 
@@ -110,6 +144,13 @@ bun run portkey_auth_skill.ts unlock --password "your-password"
 
 # Or target a specific profile/keystore file
 bun run portkey_auth_skill.ts unlock --password "your-password" --login-email "user@example.com"
+
+# If the password was forgotten, re-login / recover and save a new reusable keystore
+bun run portkey_auth_skill.ts recover-and-save \
+  --email "user@example.com" \
+  --guardians-approved '[...]' \
+  --chain-id AELF \
+  --password "new-password"
 
 # Check status
 bun run portkey_auth_skill.ts wallet-status
@@ -135,7 +176,12 @@ bun run portkey_auth_skill.ts recover-and-save \
   --chain-id AELF \
   --password "your-password"
 
-# 2. wait until the recovered manager appears on the target chain
+# 2. poll manager sync on the target chain
+bun run portkey_query_skill.ts manager-sync-status \
+  --ca-hash "<caHash>" \
+  --chain-id tDVV \
+  --manager-address "<managerAddress from recover-and-save or the selected signer>"
+
 # 3. collect fresh transferApprove proofs
 # 4. transfer using the saved keystore directly in the tx command
 bun run portkey_tx_skill.ts transfer \
@@ -154,6 +200,8 @@ Notes:
 
 - CA write commands can now resolve signer directly from `--login-email` + `--password`, so they no longer depend on a previous `unlock` from another CLI process.
 - Same-chain and cross-chain transfers now check whether the current manager is already synced to the target chain before sending any transaction.
+- Generic `forward-call` now performs the same manager sync precheck before fee preview or transaction send.
+- `wallet-status` returns `recommendedAction` and `userHint` when a local keystore exists but is still locked. `recommendedAction` is the machine-routable next step (`unlock`), while `userHint` carries the fallback guidance for wrong profile selection or forgotten passwords.
 - Transfer results include a fee preview when the chain can calculate it, including `chargingAddress` and whether the CA appears to be paying the fee.
 
 ## Cross-skill signing

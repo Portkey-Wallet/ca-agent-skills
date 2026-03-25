@@ -101,7 +101,9 @@ export async function callViewMethod<T = unknown>(
     throw new Error(`Contract method "${methodName}" not found at ${contractAddress}`);
   }
 
-  const result = await method.call(params ?? {});
+  const result = params === undefined
+    ? await method.call()
+    : await method.call(params);
   if (result && typeof result === 'object' && 'error' in result && result.error) {
     throw new Error(`View call ${methodName} failed: ${JSON.stringify(result.error)}`);
   }

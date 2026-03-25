@@ -23,6 +23,7 @@ import {
   SIGNER_ERROR_CODES,
   formatSignerError,
 } from '../../lib/signer-error-codes.js';
+import { RUNTIME_SKILL_VERSION } from '../../lib/runtime-version.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -32,6 +33,11 @@ const KEYSTORE_DIR = path.join(os.homedir(), '.portkey', 'ca');
 const DIR_MODE = 0o700;
 const FILE_MODE = 0o600;
 const ALLOWED_NETWORKS = ['mainnet'] as const;
+const LOCKED_KEYSTORE_RECOVERY_HINT =
+  'A local keystore already exists for this account, so the password is required to continue. ' +
+  'First confirm that the selected loginEmail / keystoreFile is the one you intended to use. ' +
+  'If the password was forgotten, you can re-login / recover with recover-and-save. ' +
+  'Re-login requires fresh guardian verification codes and will save a new local keystore after success.';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -75,6 +81,10 @@ export interface WalletStatus {
   managerAddress: string | null;
   /** Network */
   network: NetworkType;
+  /** Recommended next step for the local keystore */
+  recommendedAction?: 'none' | 'unlock';
+  /** User-facing hint for the next step */
+  userHint?: string | null;
 }
 
 export interface WalletProfileSummary {
@@ -212,6 +222,17 @@ function getRequestedKeystorePath(network: string, loginEmail?: string): string 
   return getKeystorePath(network, loginEmail);
 }
 
+function resolveStatusKeystorePath(network: NetworkType, loginEmail?: string): string {
+  if (loginEmail) {
+    return getRequestedKeystorePath(network, loginEmail);
+  }
+  const active = getActiveKeystorePath();
+  if (active && fs.existsSync(active)) {
+    return active;
+  }
+  return getRequestedKeystorePath(network);
+}
+
 function resolveKeystorePath(locator: KeystoreLocatorInput): string {
   if (locator.keystoreFile) {
     return path.resolve(locator.keystoreFile);
@@ -259,6 +280,14 @@ function loadWalletProfileSummary(
     keystoreFile,
     isActive: isSamePath(getActiveKeystorePath(), keystoreFile),
   };
+}
+
+function getLockedKeystoreHint(): string {
+  return LOCKED_KEYSTORE_RECOVERY_HINT;
+}
+
+function withLockedKeystoreHint(message: string): string {
+  return `${message} ${getLockedKeystoreHint()}`;
 }
 
 function listProfileKeystoreFiles(network: NetworkType): string[] {
@@ -352,7 +381,7 @@ export function saveKeystore(params: SaveKeystoreParams): {
     },
     {
       skill: 'portkey-ca',
-      version: process.env.npm_package_version || '0.0.0',
+      version: RUNTIME_SKILL_VERSION,
     },
   );
 
@@ -402,10 +431,19 @@ export function unlockWallet(
   const fileContent = readKeystoreFile(filePath);
 
   // Use aelf-sdk's unlockKeystore to decrypt
-  const decrypted = unlockKeystore(fileContent.keystore, password);
+  let decrypted: ReturnType<typeof unlockKeystore> | null = null;
+  try {
+    decrypted = unlockKeystore(fileContent.keystore, password);
+  } catch {
+    throw new Error(
+      withLockedKeystoreHint('Failed to decrypt keystore. The password may be incorrect.'),
+    );
+  }
 
   if (!decrypted || !decrypted.privateKey) {
-    throw new Error('Failed to decrypt keystore. Wrong password?');
+    throw new Error(
+      withLockedKeystoreHint('Failed to decrypt keystore. The password may be incorrect.'),
+    );
   }
 
   const wallet = getWalletByPrivateKey(decrypted.privateKey);
@@ -433,7 +471,7 @@ export function unlockWallet(
     },
     {
       skill: 'portkey-ca',
-      version: process.env.npm_package_version || '0.0.0',
+      version: RUNTIME_SKILL_VERSION,
     },
   );
 
@@ -465,7 +503,7 @@ export function lockWallet(): { message: string } {
  */
 export function getWalletStatus(network: string, loginEmail?: string): WalletStatus {
   const resolvedNetwork = assertAllowedNetwork(network);
-  const filePath = getRequestedKeystorePath(resolvedNetwork, loginEmail);
+  const filePath = resolveStatusKeystorePath(resolvedNetwork, loginEmail);
   const exists = fs.existsSync(filePath);
   const unlocked = unlockedState !== null && isSamePath(unlockedState.keystorePath, filePath);
   const metadata = exists
@@ -480,6 +518,8 @@ export function getWalletStatus(network: string, loginEmail?: string): WalletSta
     loginEmail: metadata.loginEmail,
     managerAddress: unlocked ? unlockedState!.wallet.address : null,
     network: resolvedNetwork,
+    recommendedAction: exists && !unlocked ? 'unlock' : 'none',
+    userHint: exists && !unlocked ? getLockedKeystoreHint() : null,
   };
 }
 
@@ -528,7 +568,9 @@ export function resolveManagerWallet(
       throw new Error(
         formatSignerError(
           SIGNER_ERROR_CODES.PASSWORD_REQUIRED,
-          'password is required for CA keystore access (set PORTKEY_CA_KEYSTORE_PASSWORD or pass password)',
+          withLockedKeystoreHint(
+            'password is required for CA keystore access (set PORTKEY_CA_KEYSTORE_PASSWORD or pass password).',
+          ),
         ),
       );
     }
@@ -572,7 +614,9 @@ export function resolveManagerWallet(
       throw new Error(
         formatSignerError(
           SIGNER_ERROR_CODES.PASSWORD_REQUIRED,
-          'active CA context found. Set PORTKEY_CA_KEYSTORE_PASSWORD or pass password.',
+          withLockedKeystoreHint(
+            'active CA context found. Set PORTKEY_CA_KEYSTORE_PASSWORD or pass password.',
+          ),
         ),
       );
     }
@@ -711,18 +755,30 @@ function readKeystoreProfileSigner(input: SignerContextInput): AelfSigner {
     throw new Error(
       formatSignerError(
         SIGNER_ERROR_CODES.PASSWORD_REQUIRED,
-        'password is required for active CA keystore (set PORTKEY_CA_KEYSTORE_PASSWORD or pass password)',
+        withLockedKeystoreHint(
+          'password is required for active CA keystore (set PORTKEY_CA_KEYSTORE_PASSWORD or pass password).',
+        ),
       ),
     );
   }
 
   const fileContent = readKeystoreFile(keystorePath);
-  const decrypted = unlockKeystore(fileContent.keystore, password);
+  let decrypted: ReturnType<typeof unlockKeystore> | null = null;
+  try {
+    decrypted = unlockKeystore(fileContent.keystore, password);
+  } catch {
+    throw new Error(
+      formatSignerError(
+        SIGNER_ERROR_CODES.CONTEXT_INVALID,
+        withLockedKeystoreHint('failed to decrypt active CA keystore. The password may be incorrect.'),
+      ),
+    );
+  }
   if (!decrypted?.privateKey) {
     throw new Error(
       formatSignerError(
         SIGNER_ERROR_CODES.CONTEXT_INVALID,
-        'failed to decrypt active CA keystore',
+        withLockedKeystoreHint('failed to decrypt active CA keystore. The password may be incorrect.'),
       ),
     );
   }
@@ -816,6 +872,6 @@ export function setActiveWallet(input: {
 }) {
   return setActiveWalletProfile(input, {
     skill: 'portkey-ca',
-    version: process.env.npm_package_version || '0.0.0',
+    version: RUNTIME_SKILL_VERSION,
   });
 }

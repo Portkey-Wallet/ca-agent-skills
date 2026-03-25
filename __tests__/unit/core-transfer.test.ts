@@ -73,6 +73,25 @@ describe('core/transfer', () => {
       } as any),
     ).rejects.toThrow('caHash is required');
 
+    let holderInfoChecks = 0;
+    coreMockState.callViewMethodImpl = async (
+      _rpc: string,
+      contractAddress: string,
+      method: string,
+      payload: any,
+    ) => {
+      if (contractAddress === 'CA' && method === 'GetHolderInfo') {
+        holderInfoChecks += 1;
+        expect(payload.caHash).toBeTruthy();
+        return {
+          caHash: payload.caHash,
+          caAddress: 'ELF_ca_tDVV',
+          managerInfos: [{ address: wallet.address, extraData: '' }],
+          guardianList: { guardians: [] },
+        };
+      }
+      throw new Error(`Unexpected view call ${contractAddress}.${method}`);
+    };
     coreMockState.callSendMethodImpl = async (
       _rpc: string,
       _caContract: string,
@@ -110,6 +129,7 @@ describe('core/transfer', () => {
         feeAmount: '1000000',
       },
     });
+    expect(holderInfoChecks).toBe(1);
   });
 
   test('sameChainTransfer forwards guardiansApproved for one-time approval', async () => {

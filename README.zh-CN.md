@@ -18,7 +18,7 @@ ca-agent-skills/
 │   │   ├── assets.ts           # 资产查询（Token、NFT、价格）
 │   │   ├── transfer.ts         # 同链/跨链转账、卡单恢复
 │   │   ├── guardian.ts         # Guardian 管理
-│   │   ├── contract.ts         # 通用合约调用（ManagerForwardCall）
+│   │   ├── contract.ts         # 通用合约调用（view-call / ManagerForwardCall）
 │   │   └── keystore.ts         # 钱包加密持久化（save、unlock、lock）
 │   └── mcp/
 │       └── server.ts           # MCP 适配器 — Claude Desktop / Cursor / GPT
@@ -65,6 +65,38 @@ ca-agent-skills/
 | 28 | 钱包 | 钱包状态 | `portkey_wallet_status` | `getWalletStatus` |
 | 29 | 钱包 | 读取 active wallet context | `portkey_get_active_wallet` | `getActiveWallet` |
 | 30 | 钱包 | 设置 active wallet context | `portkey_set_active_wallet` | `setActiveWallet` |
+| 31 | 钱包 | Manager 同步状态 | `portkey_manager_sync_status` | `checkManagerSyncState` |
+
+## 合约调用路由规则
+
+合约工具要按方法类型选，不要只看是不是 CA 钱包。
+
+- `forward-call` / `managerForwardCall` 只用于 state-changing 方法。
+- `view-call` / `callContractViewMethod` 才用于 `Get*` 和其它 read-only 方法。
+- 对 `GetConfig` 这类 `Empty` 入参的 view 方法，要直接省略 `--params`，让工具走不带参数的 `.call()`。
+- 如果把 read-only 方法拿去走 `forward-call`，拿到的是 `CA.ManagerForwardCall` 的交易回执语义，不是 inner method 的 view 返回值。
+- `VirtualTransactionCreated` 出现在 forwarded write 回执里是正常的。它只说明 CA 合约创建了 inner call，不是解码后的返回值，也不能单独证明最终业务成功。
+
+Resonance 示例：
+
+```bash
+# 只读查询排队状态
+bun run portkey_query_skill.ts view-call \
+  --rpc-url https://tdvv-public-node.aelf.io \
+  --contract-address 28Lot71VrWm1WxrEjuDqaepywi7gYyZwHysUcztjkHGFsPPrZy \
+  --method-name GetPairQueueStatus \
+  --params '"<address>"'
+
+# 发起写操作加入队列
+bun run portkey_tx_skill.ts forward-call \
+  --login-email "user@example.com" \
+  --password "你的密码" \
+  --ca-hash "<caHash>" \
+  --contract-address 28Lot71VrWm1WxrEjuDqaepywi7gYyZwHysUcztjkHGFsPPrZy \
+  --method-name JoinPairQueue \
+  --args '{}' \
+  --chain-id tDVV
+```
 
 ## 钱包持久化（Keystore）
 
@@ -82,8 +114,10 @@ Manager 私钥使用 aelf-sdk 内置的 keystore 方案（scrypt + AES-128-CTR�
 ### 新对话
 
 ```bash
-# AI 调用 portkey_wallet_status 检查是否存在 keystore
+# AI 调用 portkey_wallet_status 检查 active 或指定 profile 的 keystore
+# 对 profile keystore，传 --login-email（或依赖之前 save/recover 写入的 active profile）
 # 如果已锁定，向用户索要密码 → portkey_unlock(密码)
+# 如果忘记密码，切换到 recover-and-save，重新完成 guardian 验证码校验并保存新的 keystore
 # 之后写操作自动生效
 ```
 
@@ -101,6 +135,13 @@ bun run portkey_auth_skill.ts save-keystore \
 # 解锁
 bun run portkey_auth_skill.ts unlock --password "你的密码"
 
+# 如果忘记密码，重新登录 / 恢复并保存新的可复用 keystore
+bun run portkey_auth_skill.ts recover-and-save \
+  --email "user@example.com" \
+  --guardians-approved '[...]' \
+  --chain-id AELF \
+  --password "新的密码"
+
 # 查看状态
 bun run portkey_auth_skill.ts wallet-status
 
@@ -114,6 +155,39 @@ bun run portkey_auth_skill.ts lock
 2. **Unlock** — 解密 keystore，将钱包加载到进程内存
 3. **Lock** — 清除内存中的私钥
 4. **写操作** — 优先使用已解锁的钱包；如果没有解锁的 keystore，fallback 到 `PORTKEY_PRIVATE_KEY` 环境变量
+
+### 推荐的 CA 写操作路径
+
+```bash
+# 1. recover -> 保存可复用 keystore
+bun run portkey_auth_skill.ts recover-and-save \
+  --email "user@example.com" \
+  --guardians-approved '[...]' \
+  --chain-id AELF \
+  --password "你的密码"
+
+# 2. 在目标链轮询 manager 是否已同步
+bun run portkey_query_skill.ts manager-sync-status \
+  --ca-hash "<caHash>" \
+  --chain-id tDVV \
+  --manager-address "<recover-and-save 返回的 managerAddress，或当前选中的 signer 地址>"
+
+# 3. 收集 fresh transferApprove proofs
+# 4. 直接用 loginEmail + password 发起写操作
+bun run portkey_tx_skill.ts transfer \
+  --login-email "user@example.com" \
+  --password "你的密码" \
+  --ca-hash "<caHash>" \
+  --token-contract "<tokenContract>" \
+  --symbol ELF \
+  --to "<receiver>" \
+  --amount 101000000 \
+  --chain-id tDVV \
+  --guardians-approved '[...]'
+```
+
+- `forward-call` 现在也会像 `transfer` / `cross-chain-transfer` 一样先检查 manager sync，未同步时不会继续做 fee preview 或发交易。
+- `wallet-status` 在本地已有 keystore 但未解锁时，会返回 `recommendedAction` 和 `userHint`。`recommendedAction` 是机器可路由的下一步（`unlock`），`userHint` 会补充“先确认 loginEmail / keystoreFile 是否选对；如果忘记密码再走 recover-and-save”的说明。
 
 ## 跨 Skill 签名共享
 

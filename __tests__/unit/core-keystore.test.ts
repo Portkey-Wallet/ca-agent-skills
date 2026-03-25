@@ -4,6 +4,10 @@ import * as os from 'os';
 import * as path from 'path';
 import { createWallet } from '../../lib/aelf-client';
 
+const packageVersion = JSON.parse(
+  fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+) as { version: string };
+
 const originalHome = process.env.HOME;
 const originalContextPath = process.env.PORTKEY_SKILL_WALLET_CONTEXT_PATH;
 const testHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ca-keystore-home-'));
@@ -93,6 +97,27 @@ describe('core/keystore', () => {
     expect(active?.source).toBe('ca-keystore');
     expect(active?.caHash).toBe('hash');
     expect(active?.caAddress).toBe('ELF_ca_tDVV');
+  });
+
+  test('saveKeystore writes active wallet context with runtime package version', () => {
+    const wallet = createWallet();
+
+    keystore.saveKeystore({
+      password: 'secret',
+      privateKey: wallet.privateKey,
+      mnemonic: wallet.mnemonic!,
+      caHash: 'hash_runtime_version',
+      caAddress: 'ELF_runtime_version_tDVV',
+      originChainId: 'tDVV',
+      network: 'mainnet',
+    });
+
+    const rawContext = JSON.parse(
+      fs.readFileSync(process.env.PORTKEY_SKILL_WALLET_CONTEXT_PATH!, 'utf8'),
+    ) as { lastWriter?: { version?: string } };
+
+    expect(rawContext.lastWriter?.version).toBe(packageVersion.version);
+    expect(rawContext.lastWriter?.version).not.toBe('0.0.0');
   });
 
   test('saveKeystore with loginEmail writes profile-specific keystore without overwriting others', () => {
@@ -200,8 +225,12 @@ describe('core/keystore', () => {
     expect(firstStatus.unlocked).toBe(true);
     expect(firstStatus.caHash).toBe('hash_first_lookup');
     expect(firstStatus.loginEmail).toBe('first@example.com');
+    expect(firstStatus.recommendedAction).toBe('none');
+    expect(firstStatus.userHint).toBeNull();
     expect(secondStatus.unlocked).toBe(false);
     expect(secondStatus.caHash).toBe('hash_second_lookup');
+    expect(secondStatus.recommendedAction).toBe('unlock');
+    expect(secondStatus.userHint).toContain('recover-and-save');
   });
 
   test('unlockWallet can target an explicit keystoreFile without loginEmail', () => {
@@ -226,7 +255,7 @@ describe('core/keystore', () => {
     expect(unlocked.managerAddress).toBe(wallet.address);
   });
 
-  test('getWalletStatus without loginEmail only checks the legacy path', () => {
+  test('getWalletStatus without loginEmail falls back to the active CA profile when available', () => {
     const wallet = createWallet();
 
     keystore.saveKeystore({
@@ -240,11 +269,15 @@ describe('core/keystore', () => {
       network: 'mainnet',
     });
 
+    keystore.lockWallet();
+
     const legacyStatus = keystore.getWalletStatus('mainnet');
     const targetedStatus = keystore.getWalletStatus('mainnet', 'profile-only@example.com');
 
-    expect(legacyStatus.loginEmail).not.toBe('profile-only@example.com');
-    expect(legacyStatus.caHash).not.toBe('hash_profile_only');
+    expect(legacyStatus.exists).toBe(true);
+    expect(legacyStatus.loginEmail).toBe('profile-only@example.com');
+    expect(legacyStatus.caHash).toBe('hash_profile_only');
+    expect(legacyStatus.recommendedAction).toBe('unlock');
     expect(targetedStatus.exists).toBe(true);
     expect(targetedStatus.loginEmail).toBe('profile-only@example.com');
     expect(targetedStatus.caHash).toBe('hash_profile_only');
@@ -348,6 +381,9 @@ describe('core/keystore', () => {
     expect(() => keystore.resolveSignerContext({ signerMode: 'auto' })).toThrow(
       'SIGNER_PASSWORD_REQUIRED',
     );
+    expect(() => keystore.resolveSignerContext({ signerMode: 'auto' })).toThrow(
+      'recover-and-save',
+    );
   });
 
   test('resolveManagerWallet unlocks a requested CA profile directly from loginEmail + password', () => {
@@ -432,5 +468,29 @@ describe('core/keystore', () => {
     expect(status.exists).toBe(true);
     expect(status.unlocked).toBe(true);
     expect(status.caHash).toBe('hash_legacy');
+    expect(status.recommendedAction).toBe('none');
+    expect(status.userHint).toBeNull();
+  });
+
+  test('unlockWallet wrong password includes re-login recovery hint', () => {
+    const wallet = createWallet();
+    keystore.saveKeystore({
+      password: 'secret',
+      privateKey: wallet.privateKey,
+      mnemonic: wallet.mnemonic!,
+      caHash: 'hash_unlock_hint',
+      caAddress: 'ELF_unlock_hint_tDVV',
+      loginEmail: 'hint@example.com',
+      originChainId: 'AELF',
+      network: 'mainnet',
+    });
+    keystore.lockWallet();
+
+    expect(() => keystore.unlockWallet('wrong-secret', 'mainnet', 'hint@example.com')).toThrow(
+      'recover-and-save',
+    );
+    expect(() => keystore.unlockWallet('wrong-secret', 'mainnet', 'hint@example.com')).toThrow(
+      'selected loginEmail / keystoreFile',
+    );
   });
 });

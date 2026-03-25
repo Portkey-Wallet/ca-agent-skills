@@ -3,6 +3,7 @@ import type {
   ChainId,
   ViewMethodParams,
   ManagerForwardCallParams,
+  ManagerSyncCheckResult,
   TransactionFeePreview,
   TransactionResult,
 } from '../../lib/types.js';
@@ -19,6 +20,7 @@ import {
   normalizeTransferGuardiansApproved,
   toContractApprovedGuardians,
 } from './guardian-approval.js';
+import { checkManagerSyncState, formatManagerSyncError } from './manager-sync.js';
 
 // ============================================================================
 // callViewMethod — generic read-only contract call
@@ -85,13 +87,26 @@ export async function managerForwardCall(
   config: PortkeyConfig,
   wallet: AElfWallet,
   params: ManagerForwardCallParams,
-): Promise<{ transactionId: string; data: TransactionResult; feePreview: TransactionFeePreview | null }> {
+): Promise<{
+  transactionId: string;
+  data: TransactionResult;
+  feePreview: TransactionFeePreview | null;
+  caAddress: string;
+}> {
   if (!params.caHash) throw new Error('caHash is required');
   if (!params.contractAddress) throw new Error('contractAddress is required');
   if (!params.methodName) throw new Error('methodName is required');
   if (!params.chainId) throw new Error('chainId is required');
 
   const chainInfo = await getChainInfoByChainId(config, params.chainId);
+  const managerSync: ManagerSyncCheckResult = params.managerSync ?? await checkManagerSyncState(config, {
+    caHash: params.caHash,
+    chainId: params.chainId,
+    managerAddress: wallet.address,
+  });
+  if (!managerSync.isManagerSynced) {
+    throw new Error(formatManagerSyncError(managerSync));
+  }
 
   // Encode the inner method's args using protobuf
   const encodedParams = await encodeManagerForwardCallParams(chainInfo.endPoint, {
@@ -129,6 +144,7 @@ export async function managerForwardCall(
   return {
     ...txResult,
     feePreview,
+    caAddress: managerSync.caAddress,
   };
 }
 
@@ -139,7 +155,12 @@ export async function managerForwardCallWithKey(
   config: PortkeyConfig,
   privateKey: string,
   params: ManagerForwardCallParams,
-): Promise<{ transactionId: string; data: TransactionResult; feePreview: TransactionFeePreview | null }> {
+): Promise<{
+  transactionId: string;
+  data: TransactionResult;
+  feePreview: TransactionFeePreview | null;
+  caAddress: string;
+}> {
   const wallet = getWalletByPrivateKey(privateKey);
   return managerForwardCall(config, wallet, params);
 }

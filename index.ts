@@ -141,8 +141,8 @@ export {
   crossChainTransfer,
   recoverStuckTransfer,
   getTransactionResult,
-  checkManagerSyncState,
 } from './src/core/transfer.js';
+export { checkManagerSyncState } from './src/core/manager-sync.js';
 
 // --- Core: Guardian (Phase 3) ---
 export {
