@@ -8,6 +8,8 @@ type ViewCallCheckResult = {
   walletHasKeyPair: boolean;
   paramsEcho: string;
   balance: string;
+  emptyCallArgCount: number;
+  configValue: string;
 };
 
 function runViewCallCheck(): ViewCallCheckResult {
@@ -54,5 +56,7 @@ describe('lib/aelf-client callViewMethod', () => {
     expect(result.walletHasKeyPair).toBe(true);
     expect(result.paramsEcho).toBe('ELF');
     expect(result.balance).toBe('123');
+    expect(result.emptyCallArgCount).toBe(0);
+    expect(result.configValue).toBe('config-ok');
   });
 });

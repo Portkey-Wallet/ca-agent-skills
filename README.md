@@ -74,6 +74,37 @@ ca-agent-skills/
 | 30 | Wallet | Set active wallet context | `portkey_set_active_wallet` | — | `setActiveWallet` |
 | 31 | Wallet | Manager sync status | `portkey_manager_sync_status` | `manager-sync-status` | `checkManagerSyncState` |
 
+## Contract Call Routing
+
+Choose the contract tool by method type, not just by wallet type.
+
+- `forward-call` / `managerForwardCall` are for state-changing methods only.
+- `view-call` / `callContractViewMethod` are for `Get*` and other read-only methods.
+- For `Empty`-input view methods such as `GetConfig`, omit `--params` entirely so the tool performs `.call()` with no arguments.
+- If a read-only method is routed through `forward-call`, the result is a `CA.ManagerForwardCall` receipt, not the inner method's decoded view return payload.
+- `VirtualTransactionCreated` is expected on successful forwarded writes. It proves that the CA contract created the inner call, but it is not the decoded return value and not a standalone proof of final business success.
+
+Resonance examples:
+
+```bash
+# Read-only queue status lookup
+bun run portkey_query_skill.ts view-call \
+  --rpc-url https://tdvv-public-node.aelf.io \
+  --contract-address 28Lot71VrWm1WxrEjuDqaepywi7gYyZwHysUcztjkHGFsPPrZy \
+  --method-name GetPairQueueStatus \
+  --params '"<address>"'
+
+# State-changing queue join
+bun run portkey_tx_skill.ts forward-call \
+  --login-email "user@example.com" \
+  --password "your-password" \
+  --ca-hash "<caHash>" \
+  --contract-address 28Lot71VrWm1WxrEjuDqaepywi7gYyZwHysUcztjkHGFsPPrZy \
+  --method-name JoinPairQueue \
+  --args '{}' \
+  --chain-id tDVV
+```
+
 ## Wallet Persistence (Keystore)
 
 Manager private keys are encrypted and stored locally using aelf-sdk's keystore scheme (scrypt + AES-128-CTR).

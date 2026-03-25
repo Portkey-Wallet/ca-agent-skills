@@ -42,6 +42,9 @@ activation:
 - Never print private keys, mnemonics, or tokens in channel outputs.
 - For write operations, require explicit user confirmation and validate parameters before sending transactions.
 - Prefer read-only preflight checks first when available.
+- Route `Get*` and other read-only contract methods through `view-call` / `callContractViewMethod`, not `forward-call`.
+- Route `forward-call` / `managerForwardCall` only to state-changing methods.
+- For `Empty`-input view methods such as `GetConfig`, omit params entirely so the runtime performs `.call()` with no arguments.
 - Treat backend `3002 / Guardian not exist.` as an unregistered account and route to `register`.
 - Before `transfer` / `cross-chain-transfer`, run `transfer-preflight` to decide whether the path is:
   - direct transfer
@@ -60,6 +63,7 @@ activation:
 - `transfer`, `cross-chain-transfer`, and generic `forward-call` now block early when the current manager has not yet synced to the target chain.
 - CLI write commands can resolve signer directly from CA keystore options (`loginEmail` / `password` / `keystoreFile`) instead of relying on a previous in-memory `unlock`.
 - `wallet-status` returns `recommendedAction` / `userHint` when a local keystore exists but is still locked. `recommendedAction=unlock` is the next machine step; `userHint` explains how to verify the selected `loginEmail` / `keystoreFile` first and then route to `recover-and-save` only if the password was truly forgotten.
+- `VirtualTransactionCreated` is forwarded-write evidence only; it is not a decoded view payload and not a standalone proof that a read-only contract query succeeded.
 
 ## Command recipes
 - Start MCP server: `bun run mcp`

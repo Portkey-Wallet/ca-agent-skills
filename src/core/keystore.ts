@@ -23,6 +23,7 @@ import {
   SIGNER_ERROR_CODES,
   formatSignerError,
 } from '../../lib/signer-error-codes.js';
+import { RUNTIME_SKILL_VERSION } from '../../lib/runtime-version.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -380,7 +381,7 @@ export function saveKeystore(params: SaveKeystoreParams): {
     },
     {
       skill: 'portkey-ca',
-      version: process.env.npm_package_version || '0.0.0',
+      version: RUNTIME_SKILL_VERSION,
     },
   );
 
@@ -470,7 +471,7 @@ export function unlockWallet(
     },
     {
       skill: 'portkey-ca',
-      version: process.env.npm_package_version || '0.0.0',
+      version: RUNTIME_SKILL_VERSION,
     },
   );
 
@@ -871,6 +872,6 @@ export function setActiveWallet(input: {
 }) {
   return setActiveWalletProfile(input, {
     skill: 'portkey-ca',
-    version: process.env.npm_package_version || '0.0.0',
+    version: RUNTIME_SKILL_VERSION,
   });
 }

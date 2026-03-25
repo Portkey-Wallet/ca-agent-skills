@@ -4,6 +4,10 @@ import * as os from 'os';
 import * as path from 'path';
 import { createWallet } from '../../lib/aelf-client';
 
+const packageVersion = JSON.parse(
+  fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+) as { version: string };
+
 const originalHome = process.env.HOME;
 const originalContextPath = process.env.PORTKEY_SKILL_WALLET_CONTEXT_PATH;
 const testHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ca-keystore-home-'));
@@ -93,6 +97,27 @@ describe('core/keystore', () => {
     expect(active?.source).toBe('ca-keystore');
     expect(active?.caHash).toBe('hash');
     expect(active?.caAddress).toBe('ELF_ca_tDVV');
+  });
+
+  test('saveKeystore writes active wallet context with runtime package version', () => {
+    const wallet = createWallet();
+
+    keystore.saveKeystore({
+      password: 'secret',
+      privateKey: wallet.privateKey,
+      mnemonic: wallet.mnemonic!,
+      caHash: 'hash_runtime_version',
+      caAddress: 'ELF_runtime_version_tDVV',
+      originChainId: 'tDVV',
+      network: 'mainnet',
+    });
+
+    const rawContext = JSON.parse(
+      fs.readFileSync(process.env.PORTKEY_SKILL_WALLET_CONTEXT_PATH!, 'utf8'),
+    ) as { lastWriter?: { version?: string } };
+
+    expect(rawContext.lastWriter?.version).toBe(packageVersion.version);
+    expect(rawContext.lastWriter?.version).not.toBe('0.0.0');
   });
 
   test('saveKeystore with loginEmail writes profile-specific keystore without overwriting others', () => {

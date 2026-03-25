@@ -13,6 +13,7 @@ type CapturedPayload = {
 let capturedWallet: CapturedWallet | null = null;
 let capturedPayload: CapturedPayload | null = null;
 let restoredPrivateKey: string | null = null;
+let emptyCallArgCount: number | null = null;
 
 class MockAElf {
   chain = {
@@ -23,6 +24,12 @@ class MockAElf {
           call: async (params: CapturedPayload) => {
             capturedPayload = params;
             return { result: { balance: '123' } };
+          },
+        },
+        GetConfig: {
+          call: async (...args: unknown[]) => {
+            emptyCallArgCount = args.length;
+            return { result: { value: 'config-ok' } };
           },
         },
       };
@@ -84,6 +91,11 @@ const result = await callViewMethod<{ balance: string }>(
   'GetBalance',
   { symbol: 'ELF' },
 );
+const configResult = await callViewMethod<{ value: string }>(
+  'https://rpc.example',
+  'ELF_contract',
+  'GetConfig',
+);
 
 assert.equal(
   restoredPrivateKey,
@@ -107,6 +119,8 @@ assert.ok(
 );
 assert.equal(payload.symbol, 'ELF', 'method.call should receive the input params');
 assert.equal(result.balance, '123', 'method.call result should be unwrapped');
+assert.equal(emptyCallArgCount, 0, 'Empty-input view calls should omit the synthetic {} payload');
+assert.equal(configResult.value, 'config-ok', 'Empty-input view result should still be unwrapped');
 
 console.log(
   JSON.stringify({
@@ -114,5 +128,7 @@ console.log(
     walletHasKeyPair: Boolean(wallet.keyPair),
     paramsEcho: payload.symbol,
     balance: result.balance,
+    emptyCallArgCount,
+    configValue: configResult.value,
   }),
 );

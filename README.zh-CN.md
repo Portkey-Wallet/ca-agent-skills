@@ -18,7 +18,7 @@ ca-agent-skills/
 │   │   ├── assets.ts           # 资产查询（Token、NFT、价格）
 │   │   ├── transfer.ts         # 同链/跨链转账、卡单恢复
 │   │   ├── guardian.ts         # Guardian 管理
-│   │   ├── contract.ts         # 通用合约调用（ManagerForwardCall）
+│   │   ├── contract.ts         # 通用合约调用（view-call / ManagerForwardCall）
 │   │   └── keystore.ts         # 钱包加密持久化（save、unlock、lock）
 │   └── mcp/
 │       └── server.ts           # MCP 适配器 — Claude Desktop / Cursor / GPT
@@ -66,6 +66,37 @@ ca-agent-skills/
 | 29 | 钱包 | 读取 active wallet context | `portkey_get_active_wallet` | `getActiveWallet` |
 | 30 | 钱包 | 设置 active wallet context | `portkey_set_active_wallet` | `setActiveWallet` |
 | 31 | 钱包 | Manager 同步状态 | `portkey_manager_sync_status` | `checkManagerSyncState` |
+
+## 合约调用路由规则
+
+合约工具要按方法类型选，不要只看是不是 CA 钱包。
+
+- `forward-call` / `managerForwardCall` 只用于 state-changing 方法。
+- `view-call` / `callContractViewMethod` 才用于 `Get*` 和其它 read-only 方法。
+- 对 `GetConfig` 这类 `Empty` 入参的 view 方法，要直接省略 `--params`，让工具走不带参数的 `.call()`。
+- 如果把 read-only 方法拿去走 `forward-call`，拿到的是 `CA.ManagerForwardCall` 的交易回执语义，不是 inner method 的 view 返回值。
+- `VirtualTransactionCreated` 出现在 forwarded write 回执里是正常的。它只说明 CA 合约创建了 inner call，不是解码后的返回值，也不能单独证明最终业务成功。
+
+Resonance 示例：
+
+```bash
+# 只读查询排队状态
+bun run portkey_query_skill.ts view-call \
+  --rpc-url https://tdvv-public-node.aelf.io \
+  --contract-address 28Lot71VrWm1WxrEjuDqaepywi7gYyZwHysUcztjkHGFsPPrZy \
+  --method-name GetPairQueueStatus \
+  --params '"<address>"'
+
+# 发起写操作加入队列
+bun run portkey_tx_skill.ts forward-call \
+  --login-email "user@example.com" \
+  --password "你的密码" \
+  --ca-hash "<caHash>" \
+  --contract-address 28Lot71VrWm1WxrEjuDqaepywi7gYyZwHysUcztjkHGFsPPrZy \
+  --method-name JoinPairQueue \
+  --args '{}' \
+  --chain-id tDVV
+```
 
 ## 钱包持久化（Keystore）
 
