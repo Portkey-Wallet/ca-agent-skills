@@ -13,6 +13,7 @@ import {
 import { getTokenBalance, getTokenList, getNftCollections, getNftItems, getTokenPrice } from './src/core/assets.js';
 import { callContractViewMethod } from './src/core/contract.js';
 import { getTransactionResult } from './src/core/transfer.js';
+import { checkManagerSyncState } from './src/core/manager-sync.js';
 import { transferPreflight } from './src/core/security.js';
 import { validateRpcUrl } from './lib/http.js';
 import type { CaAddressInfo, TokenListStrategy } from './lib/types.js';
@@ -67,6 +68,22 @@ program.command('holder-info')
     try {
       const config = getConfig({ network: program.opts().network });
       outputSuccess(await getHolderInfo(config, { caHash: opts.caHash, chainId: opts.chainId }));
+    } catch (err: any) { outputError(err.message); }
+  });
+
+program.command('manager-sync-status')
+  .description('Check whether a manager address has synced to the CA holder on the target chain')
+  .requiredOption('--ca-hash <hash>', 'CA hash')
+  .requiredOption('--chain-id <chainId>', 'Target chain ID')
+  .requiredOption('--manager-address <addr>', 'Manager wallet address')
+  .action(async (opts) => {
+    try {
+      const config = getConfig({ network: program.opts().network });
+      outputSuccess(await checkManagerSyncState(config, {
+        caHash: opts.caHash,
+        chainId: opts.chainId,
+        managerAddress: opts.managerAddress,
+      }));
     } catch (err: any) { outputError(err.message); }
   });
 

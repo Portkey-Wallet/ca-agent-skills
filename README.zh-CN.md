@@ -65,6 +65,7 @@ ca-agent-skills/
 | 28 | 钱包 | 钱包状态 | `portkey_wallet_status` | `getWalletStatus` |
 | 29 | 钱包 | 读取 active wallet context | `portkey_get_active_wallet` | `getActiveWallet` |
 | 30 | 钱包 | 设置 active wallet context | `portkey_set_active_wallet` | `setActiveWallet` |
+| 31 | 钱包 | Manager 同步状态 | `portkey_manager_sync_status` | `checkManagerSyncState` |
 
 ## 钱包持久化（Keystore）
 
@@ -84,6 +85,7 @@ Manager 私钥使用 aelf-sdk 内置的 keystore 方案（scrypt + AES-128-CTR�
 ```bash
 # AI 调用 portkey_wallet_status 检查是否存在 keystore
 # 如果已锁定，向用户索要密码 → portkey_unlock(密码)
+# 如果忘记密码，切换到 recover-and-save，重新完成 guardian 验证码校验并保存新的 keystore
 # 之后写操作自动生效
 ```
 
@@ -101,6 +103,13 @@ bun run portkey_auth_skill.ts save-keystore \
 # 解锁
 bun run portkey_auth_skill.ts unlock --password "你的密码"
 
+# 如果忘记密码，重新登录 / 恢复并保存新的可复用 keystore
+bun run portkey_auth_skill.ts recover-and-save \
+  --email "user@example.com" \
+  --guardians-approved '[...]' \
+  --chain-id AELF \
+  --password "新的密码"
+
 # 查看状态
 bun run portkey_auth_skill.ts wallet-status
 
@@ -114,6 +123,29 @@ bun run portkey_auth_skill.ts lock
 2. **Unlock** — 解密 keystore，将钱包加载到进程内存
 3. **Lock** — 清除内存中的私钥
 4. **写操作** — 优先使用已解锁的钱包；如果没有解锁的 keystore，fallback 到 `PORTKEY_PRIVATE_KEY` 环境变量
+
+### 推荐的 CA 写操作路径
+
+```bash
+# 1. recover -> 保存可复用 keystore
+bun run portkey_auth_skill.ts recover-and-save \
+  --email "user@example.com" \
+  --guardians-approved '[...]' \
+  --chain-id AELF \
+  --password "你的密码"
+
+# 2. 在目标链轮询 manager 是否已同步
+bun run portkey_query_skill.ts manager-sync-status \
+  --ca-hash "<caHash>" \
+  --chain-id tDVV \
+  --manager-address "<managerAddress>"
+
+# 3. 收集 fresh transferApprove proofs
+# 4. 直接用 loginEmail + password 发起写操作
+```
+
+- `forward-call` 现在也会像 `transfer` / `cross-chain-transfer` 一样先检查 manager sync，未同步时不会继续做 fee preview 或发交易。
+- `wallet-status` 在本地已有 keystore 但未解锁时，会返回 `recommendedAction` 和 `userHint`，明确提示“输入密码解锁”或“忘记密码就走 recover-and-save”。
 
 ## 跨 Skill 签名共享
 

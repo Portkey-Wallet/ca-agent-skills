@@ -185,7 +185,7 @@ program.command('save-keystore')
   });
 
 program.command('unlock')
-  .description('Unlock the encrypted keystore with a password')
+  .description('Unlock the encrypted keystore with a password. If the password was forgotten, use recover-and-save to re-login / recover with fresh guardian verification codes.')
   .requiredOption('--password <pwd>', 'Keystore password')
   .option('--login-email <email>', 'Login email associated with this CA account')
   .option('--keystore-file <path>', 'Explicit CA keystore file path')
@@ -210,7 +210,7 @@ program.command('lock')
   });
 
 program.command('wallet-status')
-  .description('Check wallet status (keystore exists, unlocked, CA info)')
+  .description('Check wallet status (keystore exists, unlocked, CA info, and whether unlock or re-login is recommended)')
   .option('--login-email <email>', 'Login email associated with this CA account')
   .action(async (opts) => {
     try {

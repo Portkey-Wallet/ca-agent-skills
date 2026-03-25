@@ -170,7 +170,7 @@ withWalletOptions(program.command('remove-guardian'))
   });
 
 withWalletOptions(program.command('forward-call'))
-  .description('Generic ManagerForwardCall to any contract')
+  .description('Generic ManagerForwardCall to any contract (blocks early if the current manager is not yet synced on the target chain)')
   .requiredOption('--ca-hash <hash>', 'CA hash')
   .requiredOption('--contract-address <addr>', 'Target contract address')
   .requiredOption('--method-name <name>', 'Target method name')

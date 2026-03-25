@@ -200,8 +200,12 @@ describe('core/keystore', () => {
     expect(firstStatus.unlocked).toBe(true);
     expect(firstStatus.caHash).toBe('hash_first_lookup');
     expect(firstStatus.loginEmail).toBe('first@example.com');
+    expect(firstStatus.recommendedAction).toBe('none');
+    expect(firstStatus.userHint).toBeNull();
     expect(secondStatus.unlocked).toBe(false);
     expect(secondStatus.caHash).toBe('hash_second_lookup');
+    expect(secondStatus.recommendedAction).toBe('unlock_or_relogin');
+    expect(secondStatus.userHint).toContain('recover-and-save');
   });
 
   test('unlockWallet can target an explicit keystoreFile without loginEmail', () => {
@@ -348,6 +352,9 @@ describe('core/keystore', () => {
     expect(() => keystore.resolveSignerContext({ signerMode: 'auto' })).toThrow(
       'SIGNER_PASSWORD_REQUIRED',
     );
+    expect(() => keystore.resolveSignerContext({ signerMode: 'auto' })).toThrow(
+      'recover-and-save',
+    );
   });
 
   test('resolveManagerWallet unlocks a requested CA profile directly from loginEmail + password', () => {
@@ -432,5 +439,26 @@ describe('core/keystore', () => {
     expect(status.exists).toBe(true);
     expect(status.unlocked).toBe(true);
     expect(status.caHash).toBe('hash_legacy');
+    expect(status.recommendedAction).toBe('none');
+    expect(status.userHint).toBeNull();
+  });
+
+  test('unlockWallet wrong password includes re-login recovery hint', () => {
+    const wallet = createWallet();
+    keystore.saveKeystore({
+      password: 'secret',
+      privateKey: wallet.privateKey,
+      mnemonic: wallet.mnemonic!,
+      caHash: 'hash_unlock_hint',
+      caAddress: 'ELF_unlock_hint_tDVV',
+      loginEmail: 'hint@example.com',
+      originChainId: 'AELF',
+      network: 'mainnet',
+    });
+    keystore.lockWallet();
+
+    expect(() => keystore.unlockWallet('wrong-secret', 'mainnet', 'hint@example.com')).toThrow(
+      'recover-and-save',
+    );
   });
 });

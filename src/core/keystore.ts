@@ -32,6 +32,10 @@ const KEYSTORE_DIR = path.join(os.homedir(), '.portkey', 'ca');
 const DIR_MODE = 0o700;
 const FILE_MODE = 0o600;
 const ALLOWED_NETWORKS = ['mainnet'] as const;
+const LOCKED_KEYSTORE_RECOVERY_HINT =
+  'A local keystore already exists for this account, so the password is required to continue. ' +
+  'If the password was forgotten, you can re-login / recover with recover-and-save. ' +
+  'Re-login requires fresh guardian verification codes and will save a new local keystore after success.';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -75,6 +79,10 @@ export interface WalletStatus {
   managerAddress: string | null;
   /** Network */
   network: NetworkType;
+  /** Recommended next step for the local keystore */
+  recommendedAction?: 'none' | 'unlock' | 'unlock_or_relogin';
+  /** User-facing hint for the next step */
+  userHint?: string | null;
 }
 
 export interface WalletProfileSummary {
@@ -261,6 +269,14 @@ function loadWalletProfileSummary(
   };
 }
 
+function getLockedKeystoreHint(): string {
+  return LOCKED_KEYSTORE_RECOVERY_HINT;
+}
+
+function withLockedKeystoreHint(message: string): string {
+  return `${message} ${getLockedKeystoreHint()}`;
+}
+
 function listProfileKeystoreFiles(network: NetworkType): string[] {
   const profileDir = path.join(KEYSTORE_DIR, network);
   if (!fs.existsSync(profileDir)) return [];
@@ -402,10 +418,19 @@ export function unlockWallet(
   const fileContent = readKeystoreFile(filePath);
 
   // Use aelf-sdk's unlockKeystore to decrypt
-  const decrypted = unlockKeystore(fileContent.keystore, password);
+  let decrypted: ReturnType<typeof unlockKeystore> | null = null;
+  try {
+    decrypted = unlockKeystore(fileContent.keystore, password);
+  } catch {
+    throw new Error(
+      withLockedKeystoreHint('Failed to decrypt keystore. The password may be incorrect.'),
+    );
+  }
 
   if (!decrypted || !decrypted.privateKey) {
-    throw new Error('Failed to decrypt keystore. Wrong password?');
+    throw new Error(
+      withLockedKeystoreHint('Failed to decrypt keystore. The password may be incorrect.'),
+    );
   }
 
   const wallet = getWalletByPrivateKey(decrypted.privateKey);
@@ -480,6 +505,8 @@ export function getWalletStatus(network: string, loginEmail?: string): WalletSta
     loginEmail: metadata.loginEmail,
     managerAddress: unlocked ? unlockedState!.wallet.address : null,
     network: resolvedNetwork,
+    recommendedAction: exists && !unlocked ? 'unlock_or_relogin' : 'none',
+    userHint: exists && !unlocked ? getLockedKeystoreHint() : null,
   };
 }
 
@@ -528,7 +555,9 @@ export function resolveManagerWallet(
       throw new Error(
         formatSignerError(
           SIGNER_ERROR_CODES.PASSWORD_REQUIRED,
-          'password is required for CA keystore access (set PORTKEY_CA_KEYSTORE_PASSWORD or pass password)',
+          withLockedKeystoreHint(
+            'password is required for CA keystore access (set PORTKEY_CA_KEYSTORE_PASSWORD or pass password).',
+          ),
         ),
       );
     }
@@ -572,7 +601,9 @@ export function resolveManagerWallet(
       throw new Error(
         formatSignerError(
           SIGNER_ERROR_CODES.PASSWORD_REQUIRED,
-          'active CA context found. Set PORTKEY_CA_KEYSTORE_PASSWORD or pass password.',
+          withLockedKeystoreHint(
+            'active CA context found. Set PORTKEY_CA_KEYSTORE_PASSWORD or pass password.',
+          ),
         ),
       );
     }
@@ -711,18 +742,30 @@ function readKeystoreProfileSigner(input: SignerContextInput): AelfSigner {
     throw new Error(
       formatSignerError(
         SIGNER_ERROR_CODES.PASSWORD_REQUIRED,
-        'password is required for active CA keystore (set PORTKEY_CA_KEYSTORE_PASSWORD or pass password)',
+        withLockedKeystoreHint(
+          'password is required for active CA keystore (set PORTKEY_CA_KEYSTORE_PASSWORD or pass password).',
+        ),
       ),
     );
   }
 
   const fileContent = readKeystoreFile(keystorePath);
-  const decrypted = unlockKeystore(fileContent.keystore, password);
+  let decrypted: ReturnType<typeof unlockKeystore> | null = null;
+  try {
+    decrypted = unlockKeystore(fileContent.keystore, password);
+  } catch {
+    throw new Error(
+      formatSignerError(
+        SIGNER_ERROR_CODES.CONTEXT_INVALID,
+        withLockedKeystoreHint('failed to decrypt active CA keystore. The password may be incorrect.'),
+      ),
+    );
+  }
   if (!decrypted?.privateKey) {
     throw new Error(
       formatSignerError(
         SIGNER_ERROR_CODES.CONTEXT_INVALID,
-        'failed to decrypt active CA keystore',
+        withLockedKeystoreHint('failed to decrypt active CA keystore. The password may be incorrect.'),
       ),
     );
   }

@@ -379,7 +379,7 @@
     },
     {
       "name": "portkey-auth-unlock",
-      "description": "Unlock the encrypted keystore with a password",
+      "description": "Unlock the encrypted keystore with a password. If the password was forgotten, use recover-and-save to re-login / recover with fresh guardian verification codes.",
       "command": "bun run portkey_auth_skill.ts unlock",
       "args": [
         "--password",
@@ -421,7 +421,7 @@
     },
     {
       "name": "portkey-auth-wallet-status",
-      "description": "Check wallet status for the legacy network keystore path or a targeted loginEmail profile",
+      "description": "Check wallet status for the legacy network keystore path or a targeted loginEmail profile, including whether unlock or re-login / recover is recommended.",
       "command": "bun run portkey_auth_skill.ts wallet-status",
       "args": [
         "--login-email"
@@ -465,6 +465,40 @@
       "inputSchema": {
         "type": "object",
         "properties": {},
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "portkey-query-manager-sync-status",
+      "description": "Check whether the current manager address has synced to the CA holder on the target chain before forward-call or transfer.",
+      "command": "bun run portkey_query_skill.ts manager-sync-status",
+      "args": [
+        "--ca-hash",
+        "--chain-id",
+        "--manager-address"
+      ],
+      "cwd": ".",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "ca-hash": {
+            "type": "string",
+            "description": "CA hash"
+          },
+          "chain-id": {
+            "type": "string",
+            "description": "Target chain ID"
+          },
+          "manager-address": {
+            "type": "string",
+            "description": "Manager wallet address"
+          }
+        },
+        "required": [
+          "ca-hash",
+          "chain-id",
+          "manager-address"
+        ],
         "additionalProperties": true
       }
     },
@@ -696,7 +730,7 @@
     },
     {
       "name": "portkey-tx-forward-call",
-      "description": "Generic ManagerForwardCall to any contract",
+      "description": "Generic ManagerForwardCall to any contract. Blocks early if the current manager is not yet synced on the target chain.",
       "command": "bun run portkey_tx_skill.ts forward-call",
       "args": [
         "--ca-hash",

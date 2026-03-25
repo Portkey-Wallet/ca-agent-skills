@@ -19,6 +19,7 @@ import {
   normalizeTransferGuardiansApproved,
   toContractApprovedGuardians,
 } from './guardian-approval.js';
+import { checkManagerSyncState, formatManagerSyncError } from './manager-sync.js';
 
 // ============================================================================
 // callViewMethod — generic read-only contract call
@@ -92,6 +93,14 @@ export async function managerForwardCall(
   if (!params.chainId) throw new Error('chainId is required');
 
   const chainInfo = await getChainInfoByChainId(config, params.chainId);
+  const managerSync = await checkManagerSyncState(config, {
+    caHash: params.caHash,
+    chainId: params.chainId,
+    managerAddress: wallet.address,
+  });
+  if (!managerSync.isManagerSynced) {
+    throw new Error(formatManagerSyncError(managerSync));
+  }
 
   // Encode the inner method's args using protobuf
   const encodedParams = await encodeManagerForwardCallParams(chainInfo.endPoint, {
