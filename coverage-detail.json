@@ -3,9 +3,9 @@
   "coverageModel": "bun-text-all-files-by-file-average",
   "byFileAverage": {
     "lines": {
-      "total": 22,
-      "covered": 22,
-      "pct": 90.96567290959051
+      "total": 24,
+      "covered": 24,
+      "pct": 91.25774221509664
     },
     "functions": {
       "total": 0,
@@ -20,9 +20,9 @@
   },
   "weighted": {
     "lines": {
-      "total": 2563,
-      "covered": 2366,
-      "pct": 92.31369488880219
+      "total": 2635,
+      "covered": 2427,
+      "pct": 92.10626185958255
     },
     "functions": {
       "total": 0,
@@ -93,8 +93,8 @@
     {
       "file": "index.ts",
       "lines": {
-        "total": 15,
-        "covered": 15,
+        "total": 16,
+        "covered": 16,
         "pct": 100
       },
       "functions": {
@@ -132,6 +132,24 @@
         "total": 9,
         "covered": 9,
         "pct": 100
+      },
+      "functions": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      },
+      "branches": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      }
+    },
+    {
+      "file": "lib/runtime-version.ts",
+      "lines": {
+        "total": 10,
+        "covered": 9,
+        "pct": 90
       },
       "functions": {
         "total": 0,
@@ -273,9 +291,9 @@
     {
       "file": "src/core/contract.ts",
       "lines": {
-        "total": 80,
-        "covered": 79,
-        "pct": 98.75
+        "total": 90,
+        "covered": 89,
+        "pct": 98.88888888888889
       },
       "functions": {
         "total": 0,
@@ -345,9 +363,27 @@
     {
       "file": "src/core/keystore.ts",
       "lines": {
-        "total": 511,
-        "covered": 464,
-        "pct": 90.8023483365949
+        "total": 552,
+        "covered": 495,
+        "pct": 89.67391304347827
+      },
+      "functions": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      },
+      "branches": {
+        "total": 0,
+        "covered": 0,
+        "pct": 0
+      }
+    },
+    {
+      "file": "src/core/manager-sync.ts",
+      "lines": {
+        "total": 30,
+        "covered": 30,
+        "pct": 100
       },
       "functions": {
         "total": 0,
@@ -381,9 +417,9 @@
     {
       "file": "src/core/transfer.ts",
       "lines": {
-        "total": 180,
-        "covered": 179,
-        "pct": 99.44444444444444
+        "total": 160,
+        "covered": 159,
+        "pct": 99.375
       },
       "functions": {
         "total": 0,
