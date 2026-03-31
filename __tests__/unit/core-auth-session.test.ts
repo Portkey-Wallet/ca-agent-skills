@@ -51,6 +51,24 @@ beforeEach(() => {
         ],
       };
     }
+    if (path === '/api/app/search/chainsinfoindex') {
+      return {
+        items: [
+          {
+            chainId: 'AELF',
+            endPoint: 'https://rpc-aelf',
+            caContractAddress: 'CA_AELF',
+            defaultToken: { address: 'TOKEN_AELF', decimals: 8 },
+          },
+          {
+            chainId: 'tDVV',
+            endPoint: 'https://rpc-tdvv',
+            caContractAddress: 'CA_TDVV',
+            defaultToken: { address: 'TOKEN_TDVV', decimals: 8 },
+          },
+        ],
+      };
+    }
     throw new Error(`Unexpected GET path ${path}`);
   };
 });
@@ -107,5 +125,56 @@ describe('core/auth-session', () => {
     expect(status.exists).toBe(true);
     expect(status.unlocked).toBe(true);
     expect(status.caHash).toBe('recovered_hash');
+  });
+
+  test('recoverAndSaveWallet can optionally wait for target-chain readiness after saving', async () => {
+    coreMockState.callViewMethodImpl = async (
+      rpcUrl: string,
+      contractAddress: string,
+      method: string,
+      payload: any,
+    ) => {
+      expect(payload.caHash).toBe('recovered_hash');
+      if (rpcUrl === 'https://rpc-aelf' && contractAddress === 'CA_AELF' && method === 'GetHolderInfo') {
+        return {
+          caHash: 'recovered_hash',
+          caAddress: 'ELF_recovered_AELF',
+          managerInfos: [{ address: 'ELF_mock_wallet', extraData: '' }],
+          guardianList: { guardians: [] },
+        };
+      }
+      if (rpcUrl === 'https://rpc-tdvv' && contractAddress === 'CA_TDVV' && method === 'GetHolderInfo') {
+        return {
+          caHash: 'recovered_hash',
+          caAddress: 'ELF_recovered_tDVV',
+          managerInfos: [{ address: 'ELF_mock_wallet', extraData: '' }],
+          guardianList: { guardians: [] },
+        };
+      }
+      throw new Error(`Unexpected view call ${rpcUrl} ${contractAddress}.${method}`);
+    };
+
+    const result = await authSession.recoverAndSaveWallet(config, {
+      email: 'clawson@example.com',
+      guardiansApproved: [
+        {
+          type: 0,
+          identifier: 'clawson@example.com',
+          verifierId: 'v-1',
+          verificationDoc: '0,a,b,c,d,2,1866392',
+          signature: 'sig',
+        },
+      ],
+      chainId: 'AELF',
+      password: 'secret',
+      network: 'mainnet',
+      waitChainId: 'tDVV',
+      waitMaxChecks: 2,
+      waitDelayMs: 0,
+    });
+
+    expect(result.targetChainReady).toBe(true);
+    expect(result.targetChainStatus?.state).toBe('ready');
+    expect(result.targetChainStatus?.targetChainId).toBe('tDVV');
   });
 });

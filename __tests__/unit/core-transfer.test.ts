@@ -19,6 +19,12 @@ beforeEach(() => {
       return {
         items: [
           {
+            chainId: 'AELF',
+            endPoint: 'https://rpc-aelf',
+            caContractAddress: 'CA_AELF',
+            defaultToken: { address: 'TOKEN_AELF', decimals: 8 },
+          },
+          {
             chainId: 'tDVV',
             endPoint: 'https://rpc',
             caContractAddress: 'CA',
@@ -194,7 +200,41 @@ describe('core/transfer', () => {
         amount: '1',
         chainId: 'tDVV',
       }),
-    ).rejects.toThrow('Manager ELF_wallet is not yet synced on tDVV');
+    ).rejects.toThrow('Target-chain holder is ready on tDVV, but manager ELF_wallet is not synced yet');
+  });
+
+  test('sameChainTransfer blocks with target_holder_syncing when origin holder exists but target holder is still syncing', async () => {
+    coreMockState.callViewMethodImpl = async (
+      rpcUrl: string,
+      contractAddress: string,
+      method: string,
+      payload: any,
+    ) => {
+      if (rpcUrl === 'https://rpc' && contractAddress === 'CA' && method === 'GetHolderInfo') {
+        throw new Error(`Holder not found for caHash: ${payload.caHash}`);
+      }
+      if (rpcUrl === 'https://rpc-aelf' && contractAddress === 'CA_AELF' && method === 'GetHolderInfo') {
+        return {
+          caHash: payload.caHash,
+          caAddress: 'ELF_ca_AELF',
+          managerInfos: [{ address: wallet.address, extraData: '' }],
+          guardianList: { guardians: [] },
+        };
+      }
+      throw new Error(`Unexpected view call ${rpcUrl} ${contractAddress}.${method}`);
+    };
+
+    await expect(
+      transfer.sameChainTransfer(config, wallet, {
+        caHash: 'hash',
+        tokenContractAddress: 'TOKEN',
+        symbol: 'ELF',
+        to: 'ELF_to',
+        amount: '1',
+        chainId: 'tDVV',
+        originChainId: 'AELF',
+      }),
+    ).rejects.toThrow('Origin-chain holder is already ready on AELF');
   });
 
   test('crossChainTransfer throws when step1 is not mined', async () => {

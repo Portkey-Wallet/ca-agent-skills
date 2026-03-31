@@ -8,6 +8,7 @@ const READ_TOOLS = [
   'portkey_get_guardian_list',
   'portkey_get_holder_info',
   'portkey_manager_sync_status',
+  'portkey_wait_target_chain_ready',
   'portkey_get_chain_info',
   'portkey_get_verifier',
   'portkey_check_status',

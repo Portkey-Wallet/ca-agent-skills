@@ -22,7 +22,7 @@ import { getTokenBalance, getTokenList, getNftCollections, getNftItems, getToken
 import { getVerifierServer, sendVerificationCode, verifyCode, registerWallet, recoverWallet, checkRegisterOrRecoveryStatus } from '../core/auth.js';
 import { recoverAndSaveWallet } from '../core/auth-session.js';
 import { sameChainTransfer, crossChainTransfer, recoverStuckTransfer, getTransactionResult } from '../core/transfer.js';
-import { checkManagerSyncState } from '../core/manager-sync.js';
+import { checkManagerSyncState, waitTargetChainReady } from '../core/manager-sync.js';
 import { addGuardian, removeGuardian } from '../core/guardian.js';
 import { callContractViewMethod, managerForwardCallWithKey } from '../core/contract.js';
 import { transferPreflight } from '../core/security.js';
@@ -94,6 +94,7 @@ const READ_ONLY_TOOLS = new Set([
   'portkey_get_guardian_list',
   'portkey_get_holder_info',
   'portkey_manager_sync_status',
+  'portkey_wait_target_chain_ready',
   'portkey_get_chain_info',
   'portkey_prepare_auth_flow',
   'portkey_get_verifier',
@@ -293,20 +294,50 @@ server.registerTool(
 server.registerTool(
   'portkey_manager_sync_status',
   {
-    description: 'Check whether the current manager address has synced to the CA holder on the target chain. Use this before forward-call or claim flows on a different write chain such as tDVV.',
+    description: 'Check structured target-chain readiness for a manager address. Returns ready, manager_unsynced, target_holder_syncing, or origin_holder_missing so upper-layer skills can distinguish normal cross-chain syncing from a missing holder.',
     inputSchema: {
       caHash: z.string().describe('CA hash'),
       chainId: CHAIN_ID.describe('Target chain ID where the write will be sent'),
+      originChainId: CHAIN_ID.optional().describe('Optional origin chain ID for cross-chain readiness checks'),
       managerAddress: z.string().describe('Manager wallet address to check'),
       network: NETWORK,
     },
   },
-  async ({ caHash, chainId, managerAddress, network }) => {
+  async ({ caHash, chainId, originChainId, managerAddress, network }) => {
     try {
       return ok(await checkManagerSyncState(getConfig({ network }), {
         caHash,
         chainId,
+        originChainId,
         managerAddress,
+      }));
+    } catch (err) { return fail(err); }
+  },
+);
+
+server.registerTool(
+  'portkey_wait_target_chain_ready',
+  {
+    description: 'Wait until a recovered or registered manager becomes ready on the target chain. Keeps polling while the origin holder exists and the target holder is still syncing, or while the target holder exists but the manager has not synced yet.',
+    inputSchema: {
+      caHash: z.string().describe('CA hash'),
+      originChainId: CHAIN_ID.describe('Origin chain ID where the holder is expected to exist first'),
+      targetChainId: CHAIN_ID.describe('Target chain ID where the write will be sent'),
+      managerAddress: z.string().describe('Manager wallet address to check'),
+      maxChecks: z.number().int().positive().optional().describe('Maximum polling attempts'),
+      delayMs: z.number().int().nonnegative().optional().describe('Delay between polling attempts in milliseconds'),
+      network: NETWORK,
+    },
+  },
+  async ({ caHash, originChainId, targetChainId, managerAddress, maxChecks, delayMs, network }) => {
+    try {
+      return ok(await waitTargetChainReady(getConfig({ network }), {
+        caHash,
+        originChainId,
+        targetChainId,
+        managerAddress,
+        maxChecks,
+        delayMs,
       }));
     } catch (err) { return fail(err); }
   },
@@ -601,9 +632,10 @@ server.registerTool(
   },
   async ({ caHash, tokenContractAddress, symbol, to, amount, memo, guardiansApproved, chainId, loginEmail, password, keystoreFile, network }) => {
     try {
-      const wallet = requireWallet({ network, loginEmail, password, keystoreFile });
-      return ok(await sameChainTransfer(getConfig({ network }), wallet, {
+      const walletContext = requireWallet({ network, loginEmail, password, keystoreFile });
+      return ok(await sameChainTransfer(getConfig({ network }), walletContext.wallet, {
         caHash, tokenContractAddress, symbol, to, amount, memo, chainId,
+        originChainId: walletContext.originChainId || undefined,
         guardiansApproved: guardiansApproved
           ? parseJson(guardiansApproved, GuardianApprovedSchema, 'guardiansApproved')
           : undefined,
@@ -636,9 +668,10 @@ server.registerTool(
   },
   async ({ caHash, tokenContractAddress, symbol, to, amount, guardiansApproved, toChainId, chainId, loginEmail, password, keystoreFile, network }) => {
     try {
-      const wallet = requireWallet({ network, loginEmail, password, keystoreFile });
-      return ok(await crossChainTransfer(getConfig({ network }), wallet, {
+      const walletContext = requireWallet({ network, loginEmail, password, keystoreFile });
+      return ok(await crossChainTransfer(getConfig({ network }), walletContext.wallet, {
         caHash, tokenContractAddress, symbol, to, amount, toChainId, chainId,
+        originChainId: walletContext.originChainId || undefined,
         guardiansApproved: guardiansApproved
           ? parseJson(guardiansApproved, GuardianApprovedSchema, 'guardiansApproved')
           : undefined,
@@ -718,8 +751,8 @@ server.registerTool(
   },
   async ({ tokenContractAddress, symbol, amount, caAddress, chainId, memo, loginEmail, password, keystoreFile, network }) => {
     try {
-      const wallet = requireWallet({ network, loginEmail, password, keystoreFile });
-      return ok(await recoverStuckTransfer(getConfig({ network }), wallet, {
+      const walletContext = requireWallet({ network, loginEmail, password, keystoreFile });
+      return ok(await recoverStuckTransfer(getConfig({ network }), walletContext.wallet, {
         tokenContractAddress, symbol, amount, caAddress, chainId, memo,
       }));
     } catch (err) { return fail(err); }
@@ -746,8 +779,8 @@ server.registerTool(
   },
   async ({ caHash, guardianToAdd, guardiansApproved, chainId, loginEmail, password, keystoreFile, network }) => {
     try {
-      const wallet = requireWallet({ network, loginEmail, password, keystoreFile });
-      return ok(await addGuardian(getConfig({ network }), wallet, {
+      const walletContext = requireWallet({ network, loginEmail, password, keystoreFile });
+      return ok(await addGuardian(getConfig({ network }), walletContext.wallet, {
         caHash,
         guardianToAdd: parseJson(guardianToAdd, GuardianToAddSchema, 'guardianToAdd'),
         guardiansApproved: parseJson(
@@ -781,8 +814,8 @@ server.registerTool(
   },
   async ({ caHash, guardianToRemove, guardiansApproved, chainId, loginEmail, password, keystoreFile, network }) => {
     try {
-      const wallet = requireWallet({ network, loginEmail, password, keystoreFile });
-      return ok(await removeGuardian(getConfig({ network }), wallet, {
+      const walletContext = requireWallet({ network, loginEmail, password, keystoreFile });
+      return ok(await removeGuardian(getConfig({ network }), walletContext.wallet, {
         caHash,
         guardianToRemove: parseJson(guardianToRemove, GuardianToRemoveSchema, 'guardianToRemove'),
         guardiansApproved: parseJson(
@@ -818,15 +851,16 @@ server.registerTool(
   },
   async ({ caHash, contractAddress, methodName, args, guardiansApproved, chainId, loginEmail, password, keystoreFile, network }) => {
     try {
-      const wallet = requireWallet({ network, loginEmail, password, keystoreFile });
+      const walletContext = requireWallet({ network, loginEmail, password, keystoreFile });
       let parsedArgs: Record<string, unknown>;
       try { parsedArgs = JSON.parse(args); } catch { throw new SkillError('INVALID_PARAMS', `Invalid JSON for "args": ${args.slice(0, JSON_PREVIEW_MAX_CHARS)}`); }
-      return ok(await managerForwardCallWithKey(getConfig({ network }), wallet.privateKey, {
+      return ok(await managerForwardCallWithKey(getConfig({ network }), walletContext.wallet.privateKey, {
         caHash,
         contractAddress,
         methodName,
         args: parsedArgs,
         chainId,
+        originChainId: walletContext.originChainId || undefined,
         guardiansApproved: guardiansApproved
           ? parseJson(guardiansApproved, GuardianApprovedSchema, 'guardiansApproved')
           : undefined,
@@ -938,19 +972,22 @@ server.registerTool(
 server.registerTool(
   'portkey_recover_and_save',
   {
-    description: 'Recover an existing CA wallet, wait for pass status, and immediately save the new manager to a local encrypted keystore. Use this when you want a reusable signer instead of a one-off recovery session.',
+    description: 'Recover an existing CA wallet, wait for pass status, and immediately save the new manager to a local encrypted keystore. Optionally wait for a target chain such as tDVV to become ready before returning.',
     inputSchema: {
       email: z.string().email().describe('Email address to recover'),
       guardiansApproved: z.string().describe('JSON array of approved guardians'),
-      chainId: CHAIN_ID.describe('Resolved chain ID from portkey_prepare_auth_flow'),
+      chainId: CHAIN_ID.describe('Resolved origin chain ID from portkey_prepare_auth_flow'),
       password: PASSWORD,
       loginEmail: LOGIN_EMAIL.optional(),
       maxStatusChecks: z.number().int().positive().optional().describe('Optional max status polling attempts'),
       statusCheckDelayMs: z.number().int().positive().optional().describe('Optional delay between status polling attempts in milliseconds'),
+      waitChainId: CHAIN_ID.optional().describe('Optional target chain ID to wait for after the keystore is saved'),
+      waitMaxChecks: z.number().int().positive().optional().describe('Optional max target-chain readiness polling attempts'),
+      waitDelayMs: z.number().int().nonnegative().optional().describe('Optional delay between target-chain readiness polling attempts in milliseconds'),
       network: NETWORK,
     },
   },
-  async ({ email, guardiansApproved, chainId, password, loginEmail, maxStatusChecks, statusCheckDelayMs, network }) => {
+  async ({ email, guardiansApproved, chainId, password, loginEmail, maxStatusChecks, statusCheckDelayMs, waitChainId, waitMaxChecks, waitDelayMs, network }) => {
     try {
       return ok(await recoverAndSaveWallet(getConfig({ network }), {
         email,
@@ -965,6 +1002,9 @@ server.registerTool(
         network,
         maxStatusChecks,
         statusCheckDelayMs,
+        waitChainId,
+        waitMaxChecks,
+        waitDelayMs,
       }));
     } catch (err) { return fail(err); }
   },

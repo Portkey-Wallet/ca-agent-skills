@@ -13,7 +13,7 @@ import {
 import { getTokenBalance, getTokenList, getNftCollections, getNftItems, getTokenPrice } from './src/core/assets.js';
 import { callContractViewMethod } from './src/core/contract.js';
 import { getTransactionResult } from './src/core/transfer.js';
-import { checkManagerSyncState } from './src/core/manager-sync.js';
+import { checkManagerSyncState, waitTargetChainReady } from './src/core/manager-sync.js';
 import { transferPreflight } from './src/core/security.js';
 import { validateRpcUrl } from './lib/http.js';
 import type { CaAddressInfo, TokenListStrategy } from './lib/types.js';
@@ -72,9 +72,10 @@ program.command('holder-info')
   });
 
 program.command('manager-sync-status')
-  .description('Check whether a manager address has synced to the CA holder on the target chain. Use managerAddress from recover-and-save or the currently selected signer.')
+  .description('Check structured target-chain readiness for a manager address. Returns ready, manager_unsynced, target_holder_syncing, or origin_holder_missing.')
   .requiredOption('--ca-hash <hash>', 'CA hash')
   .requiredOption('--chain-id <chainId>', 'Target chain ID')
+  .option('--origin-chain-id <chainId>', 'Optional origin chain ID for cross-chain readiness checks')
   .requiredOption('--manager-address <addr>', 'Manager wallet address')
   .action(async (opts) => {
     try {
@@ -82,7 +83,30 @@ program.command('manager-sync-status')
       outputSuccess(await checkManagerSyncState(config, {
         caHash: opts.caHash,
         chainId: opts.chainId,
+        originChainId: opts.originChainId,
         managerAddress: opts.managerAddress,
+      }));
+    } catch (err: any) { outputError(err.message); }
+  });
+
+program.command('wait-target-chain-ready')
+  .description('Wait until a recovered or registered manager becomes ready on the target chain. Keeps polling while the origin holder exists but the target chain is still syncing, or while the target holder exists but the manager has not synced yet.')
+  .requiredOption('--ca-hash <hash>', 'CA hash')
+  .requiredOption('--origin-chain-id <chainId>', 'Origin chain ID where the holder is expected to exist first')
+  .requiredOption('--target-chain-id <chainId>', 'Target chain ID where the write will be sent')
+  .requiredOption('--manager-address <addr>', 'Manager wallet address')
+  .option('--max-checks <n>', 'Optional maximum polling attempts')
+  .option('--delay-ms <ms>', 'Optional delay between polling attempts in milliseconds')
+  .action(async (opts) => {
+    try {
+      const config = getConfig({ network: program.opts().network });
+      outputSuccess(await waitTargetChainReady(config, {
+        caHash: opts.caHash,
+        originChainId: opts.originChainId,
+        targetChainId: opts.targetChainId,
+        managerAddress: opts.managerAddress,
+        maxChecks: opts.maxChecks ? Number(opts.maxChecks) : undefined,
+        delayMs: opts.delayMs ? Number(opts.delayMs) : undefined,
       }));
     } catch (err: any) { outputError(err.message); }
   });

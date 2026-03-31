@@ -450,22 +450,38 @@ export interface TransferPreflightResult {
 // Transfer
 // ============================================================================
 
+export type ManagerSyncState =
+  | 'ready'
+  | 'manager_unsynced'
+  | 'target_holder_syncing'
+  | 'origin_holder_missing';
+
 export interface ManagerSyncCheckParams {
   /** CA hash */
   caHash: string;
-  /** Chain ID where the CA write operation will be sent */
+  /** Target chain ID where the CA write operation will be sent */
   chainId: ChainId;
+  /** Optional origin chain ID used for cross-chain readiness checks */
+  originChainId?: ChainId;
   /** Manager wallet address */
   managerAddress: string;
 }
 
 export interface ManagerSyncCheckResult {
+  state: ManagerSyncState;
   caHash: string;
+  /** Backward-compatible alias for targetChainId */
   chainId: ChainId;
+  targetChainId: ChainId;
+  originChainId: ChainId | null;
   managerAddress: string;
-  caAddress: string;
+  caAddress: string | null;
+  originCaAddress: string | null;
+  isOriginHolderReady: boolean;
+  isTargetHolderReady: boolean;
   isManagerSynced: boolean;
   managerInfos: ManagerInfo[];
+  reason: string;
 }
 
 export interface TransactionFeePreview {
@@ -492,6 +508,8 @@ export interface TransferParams {
   memo?: string;
   /** Chain ID where the transfer happens */
   chainId: ChainId;
+  /** Optional origin chain ID of the CA account for cross-chain readiness checks */
+  originChainId?: ChainId;
   /** Optional guardian approvals for one-time transfer approval */
   guardiansApproved?: ApprovedGuardian[];
 }
@@ -557,10 +575,28 @@ export interface ManagerForwardCallParams {
   methodName: string;
   args: Record<string, unknown>;
   chainId: ChainId;
+  /** Optional origin chain ID of the CA account for cross-chain readiness checks */
+  originChainId?: ChainId;
   /** Optional guardian approvals for transfer-related ManagerForwardCall flows */
   guardiansApproved?: ApprovedGuardian[];
   /** Optional pre-fetched manager sync result to avoid duplicate holder lookups */
   managerSync?: ManagerSyncCheckResult;
+}
+
+export interface WaitTargetChainReadyParams {
+  caHash: string;
+  managerAddress: string;
+  originChainId: ChainId;
+  targetChainId: ChainId;
+  maxChecks?: number;
+  delayMs?: number;
+}
+
+export interface WaitTargetChainReadyResult extends ManagerSyncCheckResult {
+  ready: boolean;
+  attempts: number;
+  maxChecks: number;
+  delayMs: number;
 }
 
 export interface RecoverAndSaveWalletParams {
@@ -573,6 +609,9 @@ export interface RecoverAndSaveWalletParams {
   extraData?: string;
   maxStatusChecks?: number;
   statusCheckDelayMs?: number;
+  waitChainId?: ChainId;
+  waitMaxChecks?: number;
+  waitDelayMs?: number;
 }
 
 export interface RecoverAndSaveWalletResult {
@@ -584,6 +623,8 @@ export interface RecoverAndSaveWalletResult {
   managerAddress: string;
   originChainId: ChainId;
   loginEmail: string | null;
+  targetChainStatus?: WaitTargetChainReadyResult;
+  targetChainReady?: boolean;
 }
 
 export interface ViewMethodParams {
