@@ -102,10 +102,14 @@ export async function managerForwardCall(
   const managerSync: ManagerSyncCheckResult = params.managerSync ?? await checkManagerSyncState(config, {
     caHash: params.caHash,
     chainId: params.chainId,
+    originChainId: params.originChainId,
     managerAddress: wallet.address,
   });
-  if (!managerSync.isManagerSynced) {
+  if (managerSync.state !== 'ready') {
     throw new Error(formatManagerSyncError(managerSync));
+  }
+  if (!managerSync.caAddress) {
+    throw new Error(`manager sync state is ready on ${params.chainId}, but caAddress is missing`);
   }
 
   // Encode the inner method's args using protobuf

@@ -9,6 +9,7 @@ import {
   checkRegisterOrRecoveryStatus,
 } from './auth.js';
 import { saveKeystore } from './keystore.js';
+import { waitTargetChainReady } from './manager-sync.js';
 
 const DEFAULT_MAX_STATUS_CHECKS = 15;
 const DEFAULT_STATUS_CHECK_DELAY_MS = 2000;
@@ -54,6 +55,17 @@ export async function recoverAndSaveWallet(
     network: params.network,
   });
 
+  const targetChainStatus = params.waitChainId
+    ? await waitTargetChainReady(config, {
+      caHash: status.caHash,
+      managerAddress: saved.managerAddress,
+      originChainId: params.chainId,
+      targetChainId: params.waitChainId,
+      maxChecks: params.waitMaxChecks,
+      delayMs: params.waitDelayMs,
+    })
+    : undefined;
+
   return {
     sessionId: recovery.sessionId,
     status: 'pass',
@@ -63,6 +75,8 @@ export async function recoverAndSaveWallet(
     managerAddress: saved.managerAddress,
     originChainId: params.chainId,
     loginEmail: params.loginEmail || params.email,
+    targetChainStatus,
+    targetChainReady: targetChainStatus?.ready,
   };
 }
 

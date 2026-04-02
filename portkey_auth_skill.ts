@@ -126,14 +126,17 @@ program.command('recover')
   });
 
 program.command('recover-and-save')
-  .description('Recover an existing CA wallet, wait for pass status, and immediately save the new manager to a keystore')
+  .description('Recover an existing CA wallet, wait for pass status, save the new manager to a keystore, and optionally wait for a target chain such as tDVV to become ready')
   .requiredOption('--email <email>', 'Email address')
   .requiredOption('--guardians-approved <json>', 'JSON array of approved guardians')
-  .requiredOption('--chain-id <chainId>', 'Resolved chain ID. Call portkey_query_skill.ts prepare-auth-flow first.')
+  .requiredOption('--chain-id <chainId>', 'Resolved origin chain ID. Call portkey_query_skill.ts prepare-auth-flow first.')
   .requiredOption('--password <pwd>', 'Password to encrypt the saved keystore')
   .option('--login-email <email>', 'Login email associated with this CA account (defaults to --email)')
   .option('--max-status-checks <n>', 'Max status polling attempts before failing')
   .option('--status-check-delay-ms <ms>', 'Delay between status polling attempts in milliseconds')
+  .option('--wait-chain-id <chainId>', 'Optional target chain ID to wait for after the keystore is saved')
+  .option('--wait-max-checks <n>', 'Optional max target-chain readiness polling attempts')
+  .option('--wait-delay-ms <ms>', 'Optional delay between target-chain readiness polling attempts in milliseconds')
   .action(async (opts) => {
     try {
       const config = getConfig({ network: program.opts().network });
@@ -146,6 +149,9 @@ program.command('recover-and-save')
         network: config.network,
         maxStatusChecks: opts.maxStatusChecks ? Number(opts.maxStatusChecks) : undefined,
         statusCheckDelayMs: opts.statusCheckDelayMs ? Number(opts.statusCheckDelayMs) : undefined,
+        waitChainId: opts.waitChainId,
+        waitMaxChecks: opts.waitMaxChecks ? Number(opts.waitMaxChecks) : undefined,
+        waitDelayMs: opts.waitDelayMs ? Number(opts.waitDelayMs) : undefined,
       }));
     } catch (err: any) { outputError(err.message); }
   });

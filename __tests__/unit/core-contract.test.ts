@@ -19,6 +19,12 @@ beforeAll(async () => {
       return {
         items: [
           {
+            chainId: 'AELF',
+            endPoint: 'https://rpc-aelf',
+            caContractAddress: 'CA_AELF',
+            defaultToken: { address: 'TOKEN_AELF', decimals: 8 },
+          },
+          {
             chainId: 'tDVV',
             endPoint: 'https://rpc',
             caContractAddress: 'CA_CONTRACT',
@@ -265,7 +271,61 @@ describe('core/contract', () => {
         args: { value: Buffer.from('1234', 'hex') },
         chainId: 'tDVV',
       }),
-    ).rejects.toThrow('Manager ELF_wallet is not yet synced on tDVV');
+    ).rejects.toThrow('Target-chain holder is ready on tDVV, but manager ELF_wallet is not synced yet');
+
+    expect(feePreviewCalled).toBe(false);
+    expect(sendCalled).toBe(false);
+  });
+
+  test('managerForwardCall blocks with target_holder_syncing before fee preview and send', async () => {
+    const wallet = { address: 'ELF_wallet', privateKey: 'pk' } as any;
+    let feePreviewCalled = false;
+    let sendCalled = false;
+
+    coreMockState.callViewMethodImpl = async (
+      rpcUrl: string,
+      contractAddress: string,
+      method: string,
+    ) => {
+      if (rpcUrl === 'https://rpc' && contractAddress === 'CA_CONTRACT' && method === 'GetHolderInfo') {
+        throw new Error('Holder not found for caHash: hash');
+      }
+      if (rpcUrl === 'https://rpc-aelf' && contractAddress === 'CA_AELF' && method === 'GetHolderInfo') {
+        return {
+          caHash: 'hash',
+          caAddress: 'ELF_ca_AELF',
+          managerInfos: [{ address: 'ELF_wallet', extraData: '' }],
+          guardianList: { guardians: [] },
+        };
+      }
+      throw new Error(`Unexpected view call ${rpcUrl} ${contractAddress}.${method}`);
+    };
+    coreMockState.calculateTransactionFeeImpl = async () => {
+      feePreviewCalled = true;
+      return {
+        transactionFee: null,
+        transactionFees: null,
+        chargingAddress: null,
+        isCaPayingFee: null,
+        feeSymbol: null,
+        feeAmount: null,
+      };
+    };
+    coreMockState.callSendMethodImpl = async () => {
+      sendCalled = true;
+      return { transactionId: 'tx-forward', data: { Status: 'MINED' } };
+    };
+
+    await expect(
+      contract.managerForwardCall(config, wallet, {
+        caHash: 'hash',
+        contractAddress: 'TOKEN',
+        methodName: 'ClaimByPortkeyToCa',
+        args: { value: Buffer.from('1234', 'hex') },
+        chainId: 'tDVV',
+        originChainId: 'AELF',
+      }),
+    ).rejects.toThrow('Origin-chain holder is already ready on AELF');
 
     expect(feePreviewCalled).toBe(false);
     expect(sendCalled).toBe(false);

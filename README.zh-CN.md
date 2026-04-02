@@ -65,7 +65,8 @@ ca-agent-skills/
 | 28 | 钱包 | 钱包状态 | `portkey_wallet_status` | `getWalletStatus` |
 | 29 | 钱包 | 读取 active wallet context | `portkey_get_active_wallet` | `getActiveWallet` |
 | 30 | 钱包 | 设置 active wallet context | `portkey_set_active_wallet` | `setActiveWallet` |
-| 31 | 钱包 | Manager 同步状态 | `portkey_manager_sync_status` | `checkManagerSyncState` |
+| 31 | 钱包 | 目标链就绪状态 | `portkey_manager_sync_status` | `checkManagerSyncState` |
+| 32 | 钱包 | 等待目标链 ready | `portkey_wait_target_chain_ready` | `waitTargetChainReady` |
 
 ## 合约调用路由规则
 
@@ -159,17 +160,26 @@ bun run portkey_auth_skill.ts lock
 ### 推荐的 CA 写操作路径
 
 ```bash
-# 1. recover -> 保存可复用 keystore
+# 1. recover -> 保存可复用 keystore，并可选等待目标链 ready
 bun run portkey_auth_skill.ts recover-and-save \
   --email "user@example.com" \
   --guardians-approved '[...]' \
   --chain-id AELF \
-  --password "你的密码"
+  --password "你的密码" \
+  --wait-chain-id tDVV
 
-# 2. 在目标链轮询 manager 是否已同步
+# 2. 查看目标链的结构化 readiness 状态
 bun run portkey_query_skill.ts manager-sync-status \
   --ca-hash "<caHash>" \
   --chain-id tDVV \
+  --origin-chain-id AELF \
+  --manager-address "<recover-and-save 返回的 managerAddress，或当前选中的 signer 地址>"
+
+# 或显式等待目标链 ready
+bun run portkey_query_skill.ts wait-target-chain-ready \
+  --ca-hash "<caHash>" \
+  --origin-chain-id AELF \
+  --target-chain-id tDVV \
   --manager-address "<recover-and-save 返回的 managerAddress，或当前选中的 signer 地址>"
 
 # 3. 收集 fresh transferApprove proofs
@@ -186,7 +196,11 @@ bun run portkey_tx_skill.ts transfer \
   --guardians-approved '[...]'
 ```
 
-- `forward-call` 现在也会像 `transfer` / `cross-chain-transfer` 一样先检查 manager sync，未同步时不会继续做 fee preview 或发交易。
+- `recover-and-save` 默认仍然只是 recovery 成功 + keystore 保存；只有传 `--wait-chain-id` 或显式调用 `wait-target-chain-ready`，才表示我们在等目标链 ready。
+- `manager-sync-status` 现在会明确区分四种状态：`ready`、`manager_unsynced`、`target_holder_syncing`、`origin_holder_missing`。
+- 只有“源链 Holder 已存在、目标链 Holder 暂时缺失”才会被视为正常跨链同步中的中间态；如果源链也缺失，CA skill 不会把它当成单纯的侧链延迟。
+- 这条 readiness 规则在两个方向都成立：`AELF -> tDVV` 和 `tDVV -> AELF`。
+- `forward-call` 现在也会像 `transfer` / `cross-chain-transfer` 一样先检查 target-chain readiness，未就绪时不会继续做 fee preview 或发交易。
 - `wallet-status` 在本地已有 keystore 但未解锁时，会返回 `recommendedAction` 和 `userHint`。`recommendedAction` 是机器可路由的下一步（`unlock`），`userHint` 会补充“先确认 loginEmail / keystoreFile 是否选对；如果忘记密码再走 recover-and-save”的说明。
 
 ## 跨 Skill 签名共享

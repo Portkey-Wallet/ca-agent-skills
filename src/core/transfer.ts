@@ -16,7 +16,7 @@ import {
 } from '../../lib/aelf-client.js';
 import { getChainInfoByChainId } from './account.js';
 import { managerForwardCall } from './contract.js';
-import { checkManagerSyncState, formatManagerSyncError } from './manager-sync.js';
+import { checkManagerSyncState } from './manager-sync.js';
 
 // ============================================================================
 // sameChainTransfer
@@ -45,11 +45,9 @@ export async function sameChainTransfer(
   const managerSync = await checkManagerSyncState(config, {
     caHash: params.caHash,
     chainId: params.chainId,
+    originChainId: params.originChainId,
     managerAddress: wallet.address,
   });
-  if (!managerSync.isManagerSynced) {
-    throw new Error(formatManagerSyncError(managerSync));
-  }
 
   const result = await managerForwardCall(config, wallet, {
     caHash: params.caHash,
@@ -62,6 +60,7 @@ export async function sameChainTransfer(
       memo: params.memo || '',
     },
     chainId: params.chainId,
+    originChainId: params.originChainId,
     guardiansApproved: params.guardiansApproved,
     managerSync,
   });
@@ -101,11 +100,9 @@ export async function crossChainTransfer(
   const managerSync = await checkManagerSyncState(config, {
     caHash: params.caHash,
     chainId: params.chainId,
+    originChainId: params.originChainId,
     managerAddress: wallet.address,
   });
-  if (!managerSync.isManagerSynced) {
-    throw new Error(formatManagerSyncError(managerSync));
-  }
 
   const chainInfo = await getChainInfoByChainId(config, params.chainId);
 
@@ -121,6 +118,7 @@ export async function crossChainTransfer(
       memo: params.memo || '',
     },
     chainId: params.chainId,
+    originChainId: params.originChainId,
     guardiansApproved: params.guardiansApproved,
     managerSync,
   });

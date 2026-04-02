@@ -72,7 +72,8 @@ ca-agent-skills/
 | 28 | Wallet | Wallet status | `portkey_wallet_status` | `wallet-status` | `getWalletStatus` |
 | 29 | Wallet | Get active wallet context | `portkey_get_active_wallet` | — | `getActiveWallet` |
 | 30 | Wallet | Set active wallet context | `portkey_set_active_wallet` | — | `setActiveWallet` |
-| 31 | Wallet | Manager sync status | `portkey_manager_sync_status` | `manager-sync-status` | `checkManagerSyncState` |
+| 31 | Wallet | Target-chain readiness status | `portkey_manager_sync_status` | `manager-sync-status` | `checkManagerSyncState` |
+| 32 | Wallet | Wait target-chain ready | `portkey_wait_target_chain_ready` | `wait-target-chain-ready` | `waitTargetChainReady` |
 
 ## Contract Call Routing
 
@@ -169,17 +170,26 @@ bun run portkey_auth_skill.ts lock
 ### Recommended CA transfer path
 
 ```bash
-# 1. recover -> save reusable keystore
+# 1. recover -> save reusable keystore, then optionally wait for the target chain
 bun run portkey_auth_skill.ts recover-and-save \
   --email "user@example.com" \
   --guardians-approved '[...]' \
   --chain-id AELF \
-  --password "your-password"
+  --password "your-password" \
+  --wait-chain-id tDVV
 
-# 2. poll manager sync on the target chain
+# 2. inspect the structured readiness state on the target chain
 bun run portkey_query_skill.ts manager-sync-status \
   --ca-hash "<caHash>" \
   --chain-id tDVV \
+  --origin-chain-id AELF \
+  --manager-address "<managerAddress from recover-and-save or the selected signer>"
+
+# Or wait explicitly until the target chain is ready
+bun run portkey_query_skill.ts wait-target-chain-ready \
+  --ca-hash "<caHash>" \
+  --origin-chain-id AELF \
+  --target-chain-id tDVV \
   --manager-address "<managerAddress from recover-and-save or the selected signer>"
 
 # 3. collect fresh transferApprove proofs
@@ -199,8 +209,12 @@ bun run portkey_tx_skill.ts transfer \
 Notes:
 
 - CA write commands can now resolve signer directly from `--login-email` + `--password`, so they no longer depend on a previous `unlock` from another CLI process.
-- Same-chain and cross-chain transfers now check whether the current manager is already synced to the target chain before sending any transaction.
-- Generic `forward-call` now performs the same manager sync precheck before fee preview or transaction send.
+- `recover-and-save` still means recovery pass + keystore save. It does not imply that another chain is already ready unless `--wait-chain-id` is used or `wait-target-chain-ready` returns `ready`.
+- `manager-sync-status` now distinguishes four states: `ready`, `manager_unsynced`, `target_holder_syncing`, and `origin_holder_missing`.
+- Only `origin holder ready + target holder missing` is treated as a normal cross-chain syncing state. If the origin holder is also missing, the CA skill will not pretend this is just a sidechain delay.
+- The same readiness rule applies in both directions: `AELF -> tDVV` and `tDVV -> AELF`.
+- Same-chain and cross-chain transfers now check structured target-chain readiness before sending any transaction.
+- Generic `forward-call` now performs the same readiness precheck before fee preview or transaction send.
 - `wallet-status` returns `recommendedAction` and `userHint` when a local keystore exists but is still locked. `recommendedAction` is the machine-routable next step (`unlock`), while `userHint` carries the fallback guidance for wrong profile selection or forgotten passwords.
 - Transfer results include a fee preview when the chain can calculate it, including `chargingAddress` and whether the CA appears to be paying the fee.
 

@@ -3,7 +3,6 @@ import { Command } from 'commander';
 import packageJson from './package.json';
 import { getConfig } from './lib/config.js';
 import { outputSuccess, outputError, safeJsonParse } from './cli-helpers.js';
-import { getWalletByPrivateKey, type AElfWallet } from './lib/aelf-client.js';
 import { sameChainTransfer, crossChainTransfer, recoverStuckTransfer } from './src/core/transfer.js';
 import { addGuardian, removeGuardian } from './src/core/guardian.js';
 import { managerForwardCallWithKey } from './src/core/contract.js';
@@ -14,14 +13,14 @@ const program = new Command();
 program.name('portkey-tx').version(packageJson.version).description('Portkey wallet transaction & guardian tools')
   .option('--network <network>', 'Portkey network (mainnet only)', 'mainnet');
 
-function requireWallet(input: {
+function requireWalletContext(input: {
   network: string;
   loginEmail?: string;
   password?: string;
   keystoreFile?: string;
-}): AElfWallet {
+}) {
   try {
-    return resolveManagerWallet(input).wallet;
+    return resolveManagerWallet(input);
   } catch (error) {
     if (error instanceof Error) outputError(error.message);
     outputError(String(error));
@@ -48,17 +47,18 @@ withWalletOptions(program.command('transfer'))
   .requiredOption('--chain-id <chainId>', 'Chain ID')
   .action(async (opts) => {
     try {
-      const wallet = requireWallet({
+      const walletContext = requireWalletContext({
         network: program.opts().network,
         loginEmail: opts.loginEmail,
         password: opts.password,
         keystoreFile: opts.keystoreFile,
       });
       const config = getConfig({ network: program.opts().network });
-      outputSuccess(await sameChainTransfer(config, wallet, {
+      outputSuccess(await sameChainTransfer(config, walletContext.wallet, {
         caHash: opts.caHash, tokenContractAddress: opts.tokenContract,
         symbol: opts.symbol, to: opts.to, amount: opts.amount,
         memo: opts.memo, chainId: opts.chainId,
+        originChainId: walletContext.originChainId || undefined,
         guardiansApproved: opts.guardiansApproved
           ? safeJsonParse(opts.guardiansApproved, 'guardians-approved') as ApprovedGuardian[]
           : undefined,
@@ -78,17 +78,18 @@ withWalletOptions(program.command('cross-chain-transfer'))
   .requiredOption('--to-chain-id <chainId>', 'Target chain ID')
   .action(async (opts) => {
     try {
-      const wallet = requireWallet({
+      const walletContext = requireWalletContext({
         network: program.opts().network,
         loginEmail: opts.loginEmail,
         password: opts.password,
         keystoreFile: opts.keystoreFile,
       });
       const config = getConfig({ network: program.opts().network });
-      outputSuccess(await crossChainTransfer(config, wallet, {
+      outputSuccess(await crossChainTransfer(config, walletContext.wallet, {
         caHash: opts.caHash, tokenContractAddress: opts.tokenContract,
         symbol: opts.symbol, to: opts.to, amount: opts.amount,
         chainId: opts.chainId, toChainId: opts.toChainId,
+        originChainId: walletContext.originChainId || undefined,
         guardiansApproved: opts.guardiansApproved
           ? safeJsonParse(opts.guardiansApproved, 'guardians-approved') as ApprovedGuardian[]
           : undefined,
@@ -106,14 +107,14 @@ withWalletOptions(program.command('recover-stuck-transfer'))
   .option('--memo <memo>', 'Optional memo')
   .action(async (opts) => {
     try {
-      const wallet = requireWallet({
+      const walletContext = requireWalletContext({
         network: program.opts().network,
         loginEmail: opts.loginEmail,
         password: opts.password,
         keystoreFile: opts.keystoreFile,
       });
       const config = getConfig({ network: program.opts().network });
-      outputSuccess(await recoverStuckTransfer(config, wallet, {
+      outputSuccess(await recoverStuckTransfer(config, walletContext.wallet, {
         tokenContractAddress: opts.tokenContract, symbol: opts.symbol,
         amount: opts.amount, caAddress: opts.caAddress, chainId: opts.chainId,
         memo: opts.memo,
@@ -129,14 +130,14 @@ withWalletOptions(program.command('add-guardian'))
   .requiredOption('--chain-id <chainId>', 'Chain ID')
   .action(async (opts) => {
     try {
-      const wallet = requireWallet({
+      const walletContext = requireWalletContext({
         network: program.opts().network,
         loginEmail: opts.loginEmail,
         password: opts.password,
         keystoreFile: opts.keystoreFile,
       });
       const config = getConfig({ network: program.opts().network });
-      outputSuccess(await addGuardian(config, wallet, {
+      outputSuccess(await addGuardian(config, walletContext.wallet, {
         caHash: opts.caHash,
         guardianToAdd: safeJsonParse(opts.guardianToAdd, 'guardian-to-add') as GuardianToAdd,
         guardiansApproved: safeJsonParse(opts.guardiansApproved, 'guardians-approved') as ApprovedGuardian[],
@@ -153,14 +154,14 @@ withWalletOptions(program.command('remove-guardian'))
   .requiredOption('--chain-id <chainId>', 'Chain ID')
   .action(async (opts) => {
     try {
-      const wallet = requireWallet({
+      const walletContext = requireWalletContext({
         network: program.opts().network,
         loginEmail: opts.loginEmail,
         password: opts.password,
         keystoreFile: opts.keystoreFile,
       });
       const config = getConfig({ network: program.opts().network });
-      outputSuccess(await removeGuardian(config, wallet, {
+      outputSuccess(await removeGuardian(config, walletContext.wallet, {
         caHash: opts.caHash,
         guardianToRemove: safeJsonParse(opts.guardianToRemove, 'guardian-to-remove') as GuardianToRemove,
         guardiansApproved: safeJsonParse(opts.guardiansApproved, 'guardians-approved') as ApprovedGuardian[],
@@ -179,18 +180,19 @@ withWalletOptions(program.command('forward-call'))
   .requiredOption('--chain-id <chainId>', 'Chain ID')
   .action(async (opts) => {
     try {
-      const wallet = requireWallet({
+      const walletContext = requireWalletContext({
         network: program.opts().network,
         loginEmail: opts.loginEmail,
         password: opts.password,
         keystoreFile: opts.keystoreFile,
       });
       const config = getConfig({ network: program.opts().network });
-      outputSuccess(await managerForwardCallWithKey(config, wallet.privateKey, {
+      outputSuccess(await managerForwardCallWithKey(config, walletContext.wallet.privateKey, {
         caHash: opts.caHash, contractAddress: opts.contractAddress,
         methodName: opts.methodName,
         args: safeJsonParse(opts.args, 'args') as Record<string, unknown>,
         chainId: opts.chainId,
+        originChainId: walletContext.originChainId || undefined,
         guardiansApproved: opts.guardiansApproved
           ? safeJsonParse(opts.guardiansApproved, 'guardians-approved') as ApprovedGuardian[]
           : undefined,

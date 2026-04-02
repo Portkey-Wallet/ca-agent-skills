@@ -1,6 +1,6 @@
 ---
 name: "portkey-ca-agent-skills"
-version: "2.3.0"
+version: "2.4.0"
 description: "Portkey CA wallet registration/auth/guardian/transfer operations for agents."
 activation:
   keywords:
@@ -52,11 +52,19 @@ activation:
   - transfer-limit modification
   - wallet security upgrade / guardian sync
 - Recommended stable write path is:
-  - `recover-and-save`
-  - poll `manager-sync-status` on the target chain
+  - `recover-and-save --wait-chain-id <targetChain>`
+  - or `recover-and-save`, then poll `manager-sync-status` / `wait-target-chain-ready`
   - collect fresh `transferApprove` proofs
   - submit `transfer` / `cross-chain-transfer` with `loginEmail + password`
 - Older AA/CA accounts recovered on `AELF` and then written on `tDVV` are a high-risk sync scenario; always check `manager-sync-status` before the first `forward-call` / claim / transfer on `tDVV`.
+- `recover-and-save` does not imply the target chain is already ready unless `waitChainId` is provided or `wait-target-chain-ready` returns `ready`.
+- `manager-sync-status` returns structured readiness states:
+  - `ready`
+  - `manager_unsynced`
+  - `target_holder_syncing`
+  - `origin_holder_missing`
+- Only `origin holder ready + target holder missing` should be treated as a normal cross-chain syncing state. If the origin holder is also missing, do not explain the situation as a simple sidechain delay.
+- Apply the same readiness rule symmetrically for `AELF -> tDVV` and `tDVV -> AELF`.
 - `transfer-preflight` reports both the transferred asset balance and the chain default fee-token balance (`feeSymbol` / `feeBalance` / `feeDecimals`) when deciding one-time approval eligibility.
 - `send-code` / `verify-code` support `transferApprove` for one-time transfer approval proof collection.
 - `transfer`, `cross-chain-transfer`, and transfer-related `forward-call` accept optional `guardiansApproved`.
@@ -69,7 +77,8 @@ activation:
 - Start MCP server: `bun run mcp`
 - Run CLI entry: `bun run portkey_query_skill.ts chain-info`
 - Run transfer preflight: `bun run portkey_query_skill.ts transfer-preflight --ca-hash <hash> --ca-address <addr> --chain-id tDVV --symbol ELF --amount 100000000`
-- Run manager sync status: `bun run portkey_query_skill.ts manager-sync-status --ca-hash <hash> --chain-id tDVV --manager-address <addr-from-recover-and-save-or-selected-signer>`
+- Run manager sync status: `bun run portkey_query_skill.ts manager-sync-status --ca-hash <hash> --chain-id tDVV --origin-chain-id AELF --manager-address <addr-from-recover-and-save-or-selected-signer>`
+- Wait for target-chain readiness: `bun run portkey_query_skill.ts wait-target-chain-ready --ca-hash <hash> --origin-chain-id AELF --target-chain-id tDVV --manager-address <addr-from-recover-and-save-or-selected-signer>`
 - Read active wallet context: `portkey_get_active_wallet`
 - Set active wallet context: `portkey_set_active_wallet`
 - Install into IronClaw: `bun run setup ironclaw`

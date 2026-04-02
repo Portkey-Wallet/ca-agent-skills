@@ -63,14 +63,14 @@ describe('mcp requireWallet', () => {
     });
 
     const wallet = requireWallet();
-    expect(wallet.address).toBe(manager.address);
+    expect(wallet.wallet.address).toBe(manager.address);
   });
 
   test('falls back to PORTKEY_PRIVATE_KEY env when no unlocked wallet', () => {
     const envWallet = createWallet();
     process.env.PORTKEY_PRIVATE_KEY = envWallet.privateKey;
     const wallet = requireWallet();
-    expect(wallet.address).toBe(envWallet.address);
+    expect(wallet.wallet.address).toBe(envWallet.address);
   });
 
   test('uses active context + password env to auto unlock keystore', () => {
@@ -89,7 +89,7 @@ describe('mcp requireWallet', () => {
 
     process.env.PORTKEY_CA_KEYSTORE_PASSWORD = 'secret';
     const wallet = requireWallet();
-    expect(wallet.address).toBe(manager.address);
+    expect(wallet.wallet.address).toBe(manager.address);
   });
 
   test('uses active keystoreFile when loginEmail is absent', () => {
@@ -117,7 +117,7 @@ describe('mcp requireWallet', () => {
 
     process.env.PORTKEY_CA_KEYSTORE_PASSWORD = 'secret';
     const wallet = requireWallet();
-    expect(wallet.address).toBe(manager.address);
+    expect(wallet.wallet.address).toBe(manager.address);
   });
 
   test('accepts loginEmail + password input for direct keystore resolution', () => {
@@ -139,7 +139,7 @@ describe('mcp requireWallet', () => {
       loginEmail: 'direct@example.com',
       password: 'secret',
     });
-    expect(wallet.address).toBe(manager.address);
+    expect(wallet.wallet.address).toBe(manager.address);
   });
 
   test('throws SIGNER_PASSWORD_REQUIRED when active context exists without password', () => {

@@ -11,5 +11,5 @@ export function requireWallet(input: {
     loginEmail: input.loginEmail,
     password: input.password,
     keystoreFile: input.keystoreFile,
-  }).wallet;
+  });
 }

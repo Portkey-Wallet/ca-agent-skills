@@ -64,6 +64,7 @@ describe('SDK exports (index.ts)', () => {
     expect(typeof mod.crossChainTransfer).toBe('function');
     expect(typeof mod.getTransactionResult).toBe('function');
     expect(typeof mod.checkManagerSyncState).toBe('function');
+    expect(typeof mod.waitTargetChainReady).toBe('function');
   });
 
   it('should export guardian functions', async () => {

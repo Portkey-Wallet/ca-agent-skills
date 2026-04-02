@@ -59,8 +59,11 @@ export type {
   TransferPreflightParams,
   TransferPreflightDecision,
   TransferPreflightResult,
+  ManagerSyncState,
   ManagerSyncCheckParams,
   ManagerSyncCheckResult,
+  WaitTargetChainReadyParams,
+  WaitTargetChainReadyResult,
   TransactionFeePreview,
   // Transfer
   TransferParams,
@@ -142,7 +145,7 @@ export {
   recoverStuckTransfer,
   getTransactionResult,
 } from './src/core/transfer.js';
-export { checkManagerSyncState } from './src/core/manager-sync.js';
+export { checkManagerSyncState, waitTargetChainReady } from './src/core/manager-sync.js';
 
 // --- Core: Guardian (Phase 3) ---
 export {
